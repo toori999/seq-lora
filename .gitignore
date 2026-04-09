@@ -1,0 +1,23 @@
+.codex
+.venv/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Benchmark outputs
+benchmark_suite_scienceqa/
+benchmark_suite_scienceqa.log
+
+# Cached evaluation data and intermediate slices
+ood_cache/
+slice_data/
+
+# Training and evaluation artifacts
+blob_qwen35_8b_scienceqa_leftpad/
+iid_qwen35_8b_scienceqa_lora_map_leftpad/
+iid_qwen35_8b_scienceqa_lora_map_leftpad_random/
+iid_qwen35_8b_scienceqa_lora_map_leftpad_reversegrade/
+outputs_laplace_official_source_qv_lmhead/
+outputs_laplace_official_source_qv_lmhead_suite/
