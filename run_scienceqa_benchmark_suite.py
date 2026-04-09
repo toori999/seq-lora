@@ -30,7 +30,7 @@ DEFAULT_SEEDS = [0, 1, 2, 3, 4]
 POSTHOC_INTERNAL_SEED = 0
 DEFAULT_ENSEMBLE_TOTAL_SEEDS = 20
 DEFAULT_ENSEMBLE_GROUPS = 5
-EXCLUDED_STATUS_PREFIXES: Tuple[str, ...] = ("laplace_order",)
+EXCLUDED_STATUS_PREFIXES: Tuple[str, ...] = ()
 
 MAP_VARIANT_MODULES = {
     "order": "train_scienceqa_qwen35_9b_lora_map_leftpad",
@@ -1308,6 +1308,32 @@ def main() -> None:
             artifacts={
                 "map_dir": str(map_dir),
                 "slice_dir": str(order_cfg.slice_dir),
+            },
+            resume=args.resume,
+        )
+
+        laplace_dir = (cwd / "outputs_laplace_official_source_qv_lmhead_suite" / f"seed_{seed}").resolve()
+        run_and_record(
+            name=f"laplace_order_seed{seed}",
+            cmd=build_laplace_command(
+                map_dir=map_dir,
+                output_dir=laplace_dir,
+                eval_tasks=eval_tasks,
+                seed=seed,
+                fit_bsz=int(args.laplace_fit_bsz),
+                laplace_bsz=int(args.laplace_bsz),
+                prior_optim_step=int(args.laplace_prior_optim_step),
+                laplace_mc_samples=int(args.laplace_mc_samples),
+                laplace_mc_chunk=int(args.laplace_mc_chunk),
+            ),
+            parser_fn=parse_laplace_output,
+            result_root=result_root,
+            cwd=cwd,
+            seed=seed,
+            source_order="order",
+            artifacts={
+                "map_dir": str(map_dir),
+                "laplace_dir": str(laplace_dir),
             },
             resume=args.resume,
         )

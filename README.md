@@ -60,5 +60,6 @@ Logs are written to `laplace_seed<seed>.log`.
 ## Notes
 
 - First run on a fresh machine will still download the base model `Qwen/Qwen3-8B-Base` and evaluation datasets from Hugging Face.
+- The Laplace path also requires the ASDL backend package `asdfghjkl==0.1a4`, which is included in [requirements-laplace.txt](/home/tori/projects/Seq-LoRA/Seq_LoRA/requirements-laplace.txt).
 - The local cache fallbacks in [common_eval_utils.py](/home/tori/projects/Seq-LoRA/Seq_LoRA/common_eval_utils.py) only help if those datasets have already been downloaded once on that machine.
 - The benchmark outputs, Laplace caches, and large local experiment artifacts are intentionally excluded from Git.
