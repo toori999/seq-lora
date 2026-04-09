@@ -49,7 +49,7 @@ TRUST_REMOTE_CODE = True
 
 MAX_SEQ_LEN = 300
 EVAL_BSZ = 32
-KFAC_BSZ = 8
+KFAC_BSZ = 32
 
 # KFAC / train-slice loaders remain conservative
 NUM_WORKERS = 0
@@ -78,7 +78,7 @@ TEMP_BAYES = 1.0
 
 # retained for call compatibility; step-1 eval path no longer micro-batches
 BAYES_MICRO_BSZ = 32
-DELTA_CHUNK_SIZE = 8
+DELTA_CHUNK_SIZE = 32
 TOKENIZER_PADDING_SIDE = "left"
 
 from common_eval_utils import (
