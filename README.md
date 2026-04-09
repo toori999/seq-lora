@@ -30,6 +30,12 @@ bash scripts/setup_paperspace_laplace.sh
 source .venv-laplace/bin/activate
 ```
 
+For Blackwell GPUs (`sm_120`), the setup script installs the PyTorch official `cu130` wheel by default. If you want to force another official CUDA wheel index, for example `cu128`, run:
+
+```bash
+TORCH_INDEX_URL=https://download.pytorch.org/whl/cu128 bash scripts/setup_paperspace_laplace.sh
+```
+
 3. Run Laplace on a specific seed:
 
 ```bash
