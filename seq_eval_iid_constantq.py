@@ -12,7 +12,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
 
 from datasets import load_from_disk, Dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -49,7 +48,7 @@ TRUST_REMOTE_CODE = True
 
 MAX_SEQ_LEN = 300
 EVAL_BSZ = 32
-KFAC_BSZ = 32
+KFAC_BSZ = 8
 
 # KFAC / train-slice loaders remain conservative
 NUM_WORKERS = 0
@@ -76,9 +75,6 @@ PI_MAX = 1e6
 POSTERIOR_TAU = 1.0
 TEMP_BAYES = 1.0
 
-# retained for call compatibility; step-1 eval path no longer micro-batches
-BAYES_MICRO_BSZ = 32
-DELTA_CHUNK_SIZE = 32
 TOKENIZER_PADDING_SIDE = "left"
 
 from common_eval_utils import (
@@ -124,15 +120,15 @@ def _peak_reserved_gb() -> float:
         return 0.0
     return _mem_gb(torch.cuda.max_memory_reserved())
 
-def _format_eta(seconds: float) -> str:
-    seconds = max(float(seconds), 0.0)
-    if seconds < 60.0:
-        return f"{seconds:.0f}s"
-    minutes, sec = divmod(int(round(seconds)), 60)
-    if minutes < 60:
-        return f"{minutes}m{sec:02d}s"
-    hours, minutes = divmod(minutes, 60)
-    return f"{hours}h{minutes:02d}m"
+def _parse_bool(value: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    value = str(value).strip().lower()
+    if value in {"1", "true", "t", "yes", "y"}:
+        return True
+    if value in {"0", "false", "f", "no", "n"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
 
 
 def _forecast_from_final_posterior(
@@ -417,13 +413,18 @@ def estimate_mu_global_list_from_slice_grads(
 
     return mu_global_list
 
-def balance_h_g_scales(H_list: List[Tensor], G_list: List[Tensor]) -> Tuple[List[Tensor], List[Tensor], float, Dict[str, float]]:
+def balance_h_g_scales(
+    H_list: List[Tensor],
+    G_list: List[Tensor],
+    min_mean_trace_g: float = MIN_MEAN_TRACE_G,
+    pi_max: float = PI_MAX,
+) -> Tuple[List[Tensor], List[Tensor], float, Dict[str, float]]:
     mean_trace_H = torch.stack([torch.trace(H_t) / H_list[0].shape[0] for H_t in H_list]).mean()
     mean_trace_G = torch.stack([torch.trace(G_t) / G_list[0].shape[0] for G_t in G_list]).mean()
-    denom = (torch.tensor(MIN_MEAN_TRACE_G, dtype=mean_trace_G.dtype) if mean_trace_G < MIN_MEAN_TRACE_G else mean_trace_G + 1e-20)
+    denom = (torch.tensor(min_mean_trace_g, dtype=mean_trace_G.dtype) if mean_trace_G < min_mean_trace_g else mean_trace_G + 1e-20)
     pi = torch.sqrt(mean_trace_H / denom)
-    if pi > PI_MAX:
-        pi = torch.tensor(PI_MAX, dtype=pi.dtype)
+    if pi > pi_max:
+        pi = torch.tensor(pi_max, dtype=pi.dtype)
     H_bal = [H_t / pi for H_t in H_list]
     G_bal = [G_t * pi for G_t in G_list]
     stats = {
@@ -439,6 +440,8 @@ def balance_h_g_scales(H_list: List[Tensor], G_list: List[Tensor]) -> Tuple[List
 def balance_h_g_factor_scales(
     H_factors: List[Tensor],
     G_factors: List[Tensor],
+    min_mean_trace_g: float = MIN_MEAN_TRACE_G,
+    pi_max: float = PI_MAX,
 ) -> Tuple[float, Dict[str, float]]:
     mean_trace_H = torch.stack([
         trace_psd_factor(H_t) / H_factors[0].shape[0] for H_t in H_factors
@@ -447,13 +450,13 @@ def balance_h_g_factor_scales(
         trace_psd_factor(G_t) / G_factors[0].shape[0] for G_t in G_factors
     ]).mean()
     denom = (
-        torch.tensor(MIN_MEAN_TRACE_G, dtype=mean_trace_G.dtype)
-        if mean_trace_G < MIN_MEAN_TRACE_G
+        torch.tensor(min_mean_trace_g, dtype=mean_trace_G.dtype)
+        if mean_trace_G < min_mean_trace_g
         else mean_trace_G + 1e-20
     )
     pi = torch.sqrt(mean_trace_H / denom)
-    if pi > PI_MAX:
-        pi = torch.tensor(PI_MAX, dtype=pi.dtype)
+    if pi > pi_max:
+        pi = torch.tensor(pi_max, dtype=pi.dtype)
     stats = {
         "mean_trace_H": float(mean_trace_H.item()),
         "mean_trace_G": float(mean_trace_G.item()),
@@ -573,15 +576,17 @@ def eval_bayes_fast_restricted_4way_probmean(
     posterior_scale_tau: float = 0.8,
     temp_bayes: float = 1.0,
     max_mc_samples: int = 32,
+    mc_eval_chunk: int = 0,
     progress_desc: Optional[str] = None,
-    **kwargs
 ) -> Dict[str, float]:
     model.eval()
     _set_inference_fast(model)
 
     scale = float(posterior_scale_tau) / math.sqrt(max(len(lora_cache), 1))
     S = min(int(max_mc_samples), int(x_samples_T.shape[0]))
-    xS = x_samples_T[:S].contiguous()
+    if S <= 0:
+        raise ValueError("max_mc_samples must be positive.")
+    chunk_size = S if int(mc_eval_chunk) <= 0 else min(int(mc_eval_chunk), S)
 
     weight_tensors = [spec.weight.data for spec in lora_cache]
     eps = 1e-12
@@ -589,7 +594,6 @@ def eval_bayes_fast_restricted_4way_probmean(
     # 1. 预先将测试集完全加载到 GPU 显存中，避免反复的 Host->Device 拷贝
     cached_batches = []
     total_samples = 0
-    cache_t0 = time.perf_counter()
     for batch in loader:
         lengths_cpu = batch["attention_mask"].sum(dim=1)
         Lmax = max(int(lengths_cpu.max().item()), 1)
@@ -602,8 +606,6 @@ def eval_bayes_fast_restricted_4way_probmean(
 
         cached_batches.append((ids, attn, labs, num_choices))
         total_samples += labs.size(0)
-        
-    cache_time_sec = time.perf_counter() - cache_t0
 
     # 预分配全局概率张量和标签
     probs_acc_global = torch.zeros((total_samples, num_classes), device=device, dtype=torch.float32)
@@ -616,48 +618,33 @@ def eval_bayes_fast_restricted_4way_probmean(
         idx += bsz
 
     bayes_t0 = time.perf_counter()
-    progress_total = max(total_samples * S, 1)
-    progress_bar = tqdm(
-        total=progress_total,
-        desc=(progress_desc or "Seq eval"),
-        unit="sample",
-        leave=False,
-    )
+    # 2. Sample 在外层，Batch 在内层；mc_eval_chunk 只限制每次取出的样本块大小。
+    # Avoid per-batch progress/ETA formatting here because host-side logging
+    # noticeably slows down long MC runs.
+    for chunk_start in range(0, S, chunk_size):
+        chunk_end = min(chunk_start + chunk_size, S)
+        x_chunk = x_samples_T[chunk_start:chunk_end].contiguous()
+        for local_idx in range(x_chunk.shape[0]):
+            s = chunk_start + local_idx
+            deltas_s = _compute_deltas_for_one_sample(lora_cache, x_chunk[local_idx], scale)
+            torch._foreach_add_(weight_tensors, deltas_s)
 
-    # 2. 核心优化：Sample 在外层，Batch 在内层！只修改 S 次权重
-    for s in range(S):
-        # 计算第 s 个样本的微调增量，并物理注入到 7B 模型中
-        deltas_s = _compute_deltas_for_one_sample(lora_cache, xS[s], scale)
-        torch._foreach_add_(weight_tensors, deltas_s)
+            idx = 0
+            for (ids_mb, attn_mb, _, num_choices_mb) in cached_batches:
+                bsz = ids_mb.size(0)
+                logits = compute_choice_logits(
+                    model=model,
+                    input_ids=ids_mb,
+                    attention_mask=attn_mb,
+                    amp_dtype=amp_dtype,
+                )
+                logits = _mask_invalid_choices(logits, num_choices_mb)
+                probs_acc_global[idx : idx + bsz].add_(torch.softmax(logits, dim=-1))
+                idx += bsz
 
-        idx = 0
-        # 拿着注入噪声的模型，一口气推完整个缓存的测试集
-        for (ids_mb, attn_mb, _, num_choices_mb) in cached_batches:
-            bsz = ids_mb.size(0)
-            logits = compute_choice_logits(
-                model=model,
-                input_ids=ids_mb,
-                attention_mask=attn_mb,
-                amp_dtype=amp_dtype,
-            )
-            logits = _mask_invalid_choices(logits, num_choices_mb)
-            probs_acc_global[idx : idx + bsz].add_(torch.softmax(logits, dim=-1))
-            idx += bsz
-            progress_bar.update(bsz)
-            elapsed = time.perf_counter() - bayes_t0
-            avg_sec_per_sample = elapsed / max(progress_bar.n, 1)
-            eta = _format_eta(avg_sec_per_sample * max(progress_total - progress_bar.n, 0))
-            progress_bar.set_postfix(
-                mc=f"{s+1}/{S}",
-                avg_s_per_sample=f"{avg_sec_per_sample:.3f}",
-                eta=eta,
-                refresh=False,
-            )
+            torch._foreach_sub_(weight_tensors, deltas_s)
+        del x_chunk
 
-        # 恢复权重，准备下一次采样
-        torch._foreach_sub_(weight_tensors, deltas_s)
-
-    progress_bar.close()
     bayes_extra_time = time.perf_counter() - bayes_t0
 
     # 3. 计算最终的贝叶斯平均概率 (BMA)
@@ -685,6 +672,7 @@ def eval_bayes_fast_restricted_4way_probmean(
         "ece_bayes": float(ece_bay_m.compute().item()),
         "acc_bayes": float(acc_bay_m.compute().item()),
         "mc_samples_used": float(S),
+        "mc_chunk_used": float(chunk_size),
         "posterior_scale_factor": float(scale),
         "time_bayes_sec": float(bayes_extra_time),
     }
@@ -695,6 +683,34 @@ def eval_bayes_fast_restricted_4way_probmean(
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate Bayesian Seq-LoRA on various tasks with constant process noise Q.")
+    parser.add_argument("--seed", type=int, default=SEED, help="Random seed.")
+    parser.add_argument(
+        "--trust_remote_code",
+        type=_parse_bool,
+        default=TRUST_REMOTE_CODE,
+        help="Whether to enable trust_remote_code when loading the base model/tokenizer.",
+    )
+    parser.add_argument("--max_seq_len", type=int, default=MAX_SEQ_LEN, help="Maximum sequence length.")
+    parser.add_argument("--eval_bsz", type=int, default=EVAL_BSZ, help="Evaluation batch size.")
+    parser.add_argument("--kfac_bsz", type=int, default=KFAC_BSZ, help="KFAC slice batch size.")
+    parser.add_argument("--num_workers", type=int, default=NUM_WORKERS, help="Num workers for KFAC/train slice loaders.")
+    parser.add_argument("--eval_num_workers", type=int, default=EVAL_NUM_WORKERS, help="Num workers for eval loaders.")
+    parser.add_argument(
+        "--eval_prefetch_factor",
+        type=int,
+        default=EVAL_PREFETCH_FACTOR,
+        help="Prefetch factor used only when eval_num_workers > 0.",
+    )
+    parser.add_argument("--n_kfac", type=int, default=N_KFAC, help="Target number of KFAC factors/eigendirections.")
+    parser.add_argument("--lr_threshold", type=int, default=LR_THRESHOLD, help="Low-rank threshold used in subspace construction.")
+    parser.add_argument(
+        "--max_kfac_samples_per_slice",
+        type=int,
+        default=MAX_KFAC_SAMPLES_PER_SLICE,
+        help="Maximum number of KFAC samples per slice. Set to a negative value to disable the cap.",
+    )
+    parser.add_argument("--mu_obs_scale", type=float, default=MU_OBS_SCALE, help="Scale factor applied to mu observations.")
+    parser.add_argument("--mu_obs_batches", type=int, default=MU_OBS_BATCHES, help="Number of batches per slice used for mu observations.")
     parser.add_argument(
         "--task",
         type=str,
@@ -730,6 +746,36 @@ def main():
         default=float(Q_CONST_VAR),
         help="Constant process-noise variance used for all slices: Q_t = q_var * I.",
     )
+    parser.add_argument("--p1_var", type=float, default=P1_VAR, help="Initial state covariance scale P1.")
+    parser.add_argument(
+        "--subspace_dim_per_module",
+        type=int,
+        default=SUBSPACE_DIM_PER_MODULE,
+        help="Subspace dimension retained per module.",
+    )
+    parser.add_argument("--mc_eval_samples", type=int, default=MC_EVAL_SAMPLES, help="Number of MC posterior samples during evaluation.")
+    parser.add_argument(
+        "--mc_eval_chunk",
+        type=int,
+        default=0,
+        help="Optional chunk size for MC samples during evaluation. <=0 disables chunking.",
+    )
+    parser.add_argument(
+        "--min_mean_trace_g",
+        type=float,
+        default=MIN_MEAN_TRACE_G,
+        help="Numerical floor used when balancing H/G traces.",
+    )
+    parser.add_argument("--pi_max", type=float, default=PI_MAX, help="Maximum trace-balancing scale factor.")
+    parser.add_argument("--posterior_tau", type=float, default=POSTERIOR_TAU, help="Posterior scale multiplier used at evaluation.")
+    parser.add_argument("--temp_bayes", type=float, default=TEMP_BAYES, help="Temperature applied to Bayesian mean probabilities.")
+    parser.add_argument(
+        "--tokenizer_padding_side",
+        type=str,
+        default=TOKENIZER_PADDING_SIDE,
+        choices=["left", "right"],
+        help="Padding side used by the tokenizer.",
+    )
     parser.add_argument(
         "--forecast_horizon",
         type=int,
@@ -745,8 +791,8 @@ def main():
     except Exception:
         pass
 
-    torch.manual_seed(SEED)
-    random.seed(SEED)
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cpu_device = torch.device("cpu")
@@ -761,19 +807,19 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained(
         base_name,
-        trust_remote_code=TRUST_REMOTE_CODE,
+        trust_remote_code=bool(args.trust_remote_code),
         use_fast=True,
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.bos_token if tokenizer.bos_token is not None else tokenizer.eos_token
-    tokenizer.padding_side = TOKENIZER_PADDING_SIDE
+    tokenizer.padding_side = args.tokenizer_padding_side
 
     num_classes = get_task_num_classes(args.task)
     choice_token_ids = get_choice_token_ids(tokenizer, device, num_classes)
 
     base_model = AutoModelForCausalLM.from_pretrained(
         base_name,
-        trust_remote_code=TRUST_REMOTE_CODE,
+        trust_remote_code=bool(args.trust_remote_code),
         torch_dtype=(amp_dtype if device.type == "cuda" else None),
         attn_implementation="sdpa",
     ).to(device)
@@ -823,7 +869,7 @@ def main():
             eval_task,
             eval_raw,
             tokenizer,
-            MAX_SEQ_LEN,
+            args.max_seq_len,
             pad_to_max_length=False,
         )
         eval_proc = eval_proc.add_column("seq_len", [len(x) for x in eval_proc["input_ids"]])
@@ -836,7 +882,7 @@ def main():
         args.task,
         train_raw,
         tokenizer,
-        MAX_SEQ_LEN,
+        args.max_seq_len,
         pad_to_max_length=False,
     )
     if "slice_id" not in train_proc.column_names:
@@ -859,13 +905,16 @@ def main():
     slice_loaders: List[DataLoader] = []
     total_kfac_samples = 0
     total_kfac_batches = 0
+    max_kfac_samples_per_slice = (
+        None if int(args.max_kfac_samples_per_slice) < 0 else int(args.max_kfac_samples_per_slice)
+    )
     for sid in slice_ids:
         ds_t = train_proc.filter(lambda ex, sid=sid: int(ex["slice_id"]) == sid)
-        if MAX_KFAC_SAMPLES_PER_SLICE is not None and len(ds_t) > MAX_KFAC_SAMPLES_PER_SLICE:
-            ds_t = ds_t.shuffle(seed=42).select(range(MAX_KFAC_SAMPLES_PER_SLICE))
+        if max_kfac_samples_per_slice is not None and len(ds_t) > max_kfac_samples_per_slice:
+            ds_t = ds_t.shuffle(seed=42).select(range(max_kfac_samples_per_slice))
         ds_t = ds_t.sort("seq_len")
-        eff_batches = len(ds_t) // KFAC_BSZ
-        eff_samples = eff_batches * KFAC_BSZ
+        eff_batches = len(ds_t) // args.kfac_bsz
+        eff_samples = eff_batches * args.kfac_bsz
         total_kfac_samples += eff_samples
         total_kfac_batches += eff_batches
         print(
@@ -876,11 +925,11 @@ def main():
         slice_loaders.append(
             DataLoader(
                 ds_loader,
-                batch_size=KFAC_BSZ,
+                batch_size=args.kfac_bsz,
                 shuffle=False,
                 drop_last=True,
                 collate_fn=kfac_collator,
-                num_workers=NUM_WORKERS,
+                num_workers=args.num_workers,
                 pin_memory=pin_memory,
             )
         )
@@ -906,8 +955,8 @@ def main():
                     model=model,
                     forward_call=forward_call_for_kfac,
                     loader=loader_t,
-                    n_kfac=N_KFAC,
-                    lr_threshold=LR_THRESHOLD,
+                    n_kfac=args.n_kfac,
+                    lr_threshold=args.lr_threshold,
                     target_module_keywords=["lora_A"],
                     exclude_bias=False,
                     use_tqdm=True,
@@ -947,7 +996,12 @@ def main():
         for name in module_names:
             H_factors = H_factor_per_module[name]
             G_factors = G_factor_per_module[name]
-            pi, hgpi_stats = balance_h_g_factor_scales(H_factors, G_factors)
+            pi, hgpi_stats = balance_h_g_factor_scales(
+                H_factors,
+                G_factors,
+                min_mean_trace_g=float(args.min_mean_trace_g),
+                pi_max=float(args.pi_max),
+            )
             module_hgpi_stats[name] = hgpi_stats
 
             H_bar_bal = materialize_mean_psd_from_factors(
@@ -966,7 +1020,7 @@ def main():
             subspace_info_gpu = build_global_kronecker_eigenspace(
                 H_list=[H_bar_bal],
                 G_B_list=[G_bar_bal],
-                subspace_dim=SUBSPACE_DIM_PER_MODULE,
+                subspace_dim=args.subspace_dim_per_module,
                 eps_eig=1e-6,
             )
             _, R_list = project_curvature_factors_to_subspace(
@@ -1019,10 +1073,10 @@ def main():
             module_subspace_info,
             module_R_lists,
             device,
-            MU_OBS_BATCHES,
+            args.mu_obs_batches,
             torch.float64,
         )
-        mu_global_list = [MU_OBS_SCALE * mu_t for mu_t in mu_global_list]
+        mu_global_list = [float(args.mu_obs_scale) * mu_t for mu_t in mu_global_list]
 
         q_var_list = [float(args.constant_q_var) for _ in range(T)]
 
@@ -1032,10 +1086,10 @@ def main():
         if args.forecast_horizon > 0:
             print(
                 f"\nDirectly sampling forecast posterior (t=T+{args.forecast_horizon} | T): "
-                f"S={MC_EVAL_SAMPLES}"
+                f"S={args.mc_eval_samples}"
             )
         else:
-            print(f"\nDirectly sampling final posterior (t=T): S={MC_EVAL_SAMPLES}")
+            print(f"\nDirectly sampling final posterior (t=T): S={args.mc_eval_samples}")
 
         x_sample_parts: List[Tensor] = []
         for spec in module_specs:
@@ -1051,7 +1105,7 @@ def main():
                 mu_list=mu_module_list,
             )
             m1 = torch.zeros(Lm, device=cpu_device, dtype=torch.float64)
-            P1 = P1_VAR * torch.eye(Lm, device=cpu_device, dtype=torch.float64)
+            P1 = float(args.p1_var) * torch.eye(Lm, device=cpu_device, dtype=torch.float64)
             Q_list = materialize_scalar_Q_list(
                 q_var_list,
                 L=Lm,
@@ -1082,7 +1136,7 @@ def main():
                 mu_T_m,
                 covariance_matrix=cov_T_stable,
             )
-            x_sample_parts.append(dist_m.sample((MC_EVAL_SAMPLES,)))
+            x_sample_parts.append(dist_m.sample((int(args.mc_eval_samples),)))
 
             del H_obs_list, y_list, Q_list, x_filt_m, P_filt_m, mu_T_m, cov_T_m, cov_T_stable, dist_m
             gc.collect()
@@ -1103,16 +1157,16 @@ def main():
     )
 
     eval_loader_kwargs = {
-        "batch_size": EVAL_BSZ,
+        "batch_size": args.eval_bsz,
         "shuffle": False,
         "drop_last": False,
         "collate_fn": eval_collator,
-        "num_workers": EVAL_NUM_WORKERS,
+        "num_workers": args.eval_num_workers,
         "pin_memory": pin_memory,
     }
-    if EVAL_NUM_WORKERS > 0:
+    if args.eval_num_workers > 0:
         eval_loader_kwargs["persistent_workers"] = True
-        eval_loader_kwargs["prefetch_factor"] = EVAL_PREFETCH_FACTOR
+        eval_loader_kwargs["prefetch_factor"] = args.eval_prefetch_factor
 
     def eval_one(tag: str, proc: Dataset):
         proc_eval = proc.remove_columns(["seq_len"]) if "seq_len" in proc.column_names else proc
@@ -1127,12 +1181,11 @@ def main():
                 num_classes=num_classes,
                 lora_cache=lora_cache,
                 x_samples_T=x_samples_T,
-                posterior_scale_tau=POSTERIOR_TAU,
-                temp_bayes=TEMP_BAYES,
-                max_mc_samples=MC_EVAL_SAMPLES,
+                posterior_scale_tau=args.posterior_tau,
+                temp_bayes=args.temp_bayes,
+                max_mc_samples=args.mc_eval_samples,
+                mc_eval_chunk=args.mc_eval_chunk,
                 progress_desc=f"SEQ {tag}",
-                bayes_micro_bsz=BAYES_MICRO_BSZ,
-                delta_chunk_size=DELTA_CHUNK_SIZE,
             )
 
         print(f"\n[{tag}]\n  ===== Bayesian (Seq-LoRA) Only =====")

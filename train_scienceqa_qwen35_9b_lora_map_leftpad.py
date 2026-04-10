@@ -81,6 +81,51 @@ SEEDS = [0]
 TOKENIZER_PADDING_SIDE = "left"
 
 
+def _cuda_sync() -> None:
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+
+def _mem_gb(x: int) -> float:
+    return float(x) / (1024 ** 3)
+
+
+def _reset_cuda_peak() -> None:
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.empty_cache()
+
+
+def _peak_alloc_gb() -> float:
+    if not torch.cuda.is_available():
+        return 0.0
+    return _mem_gb(torch.cuda.max_memory_allocated())
+
+
+def _peak_reserved_gb() -> float:
+    if not torch.cuda.is_available():
+        return 0.0
+    return _mem_gb(torch.cuda.max_memory_reserved())
+
+
+class _StageTimer:
+    def __init__(self, tag: str):
+        self.tag = tag
+        self.t0 = None
+
+    def __enter__(self):
+        _reset_cuda_peak()
+        _cuda_sync()
+        self.t0 = time.perf_counter()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        _cuda_sync()
+        dt = time.perf_counter() - self.t0
+        print(f"[TIME] {self.tag}: {dt:.2f} sec ({dt/60:.2f} min)")
+        print(f"[PEAK] {self.tag}: alloc={_peak_alloc_gb():.2f} GB  reserved={_peak_reserved_gb():.2f} GB")
+
+
 def set_seed(seed: int) -> None:
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
@@ -679,7 +724,8 @@ def run_one(seed: int, train_raw: Dataset, eval_raw: Dataset) -> Dict[str, float
     model.print_trainable_parameters()
 
     print(f"[Train] run_dir={run_dir}")
-    lora_state_map = train_map(model, train_loader, eval_loader, device, amp_dtype, run_dir)
+    with _StageTimer(f"TRAIN MAP on {RUN_TAG}"):
+        lora_state_map = train_map(model, train_loader, eval_loader, device, amp_dtype, run_dir)
 
     load_lora_state_dict(model, lora_state_map)
     map_dir = os.path.join(run_dir, f"map_step_{MAP_STEP_FOR_TABLE}")

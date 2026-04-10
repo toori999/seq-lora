@@ -355,14 +355,15 @@ def _official_blob_linear_forward(self, x: torch.Tensor, *args, **kwargs):
             sigma_a = _official_sigma_from_rho(self.lora_A_rho[active_adapter], self.bayes_eps)
             scaling = self.scaling[active_adapter]
             dropout = self.lora_dropout[active_adapter]
+            rank = int(lora_A.weight.shape[0])
             x_noise = x.to(lora_A.weight.dtype)
 
             if x_noise.dim() == 2:
                 r_a = torch.ones((x_noise.size(0), self.in_features), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
-                s_a = torch.ones((x_noise.size(0), self.r[active_adapter]), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
+                s_a = torch.ones((x_noise.size(0), rank), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
             elif x_noise.dim() == 3:
                 r_a = torch.ones((x_noise.size(0), x_noise.size(1), self.in_features), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
-                s_a = torch.ones((x_noise.size(0), x_noise.size(1), self.r[active_adapter]), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
+                s_a = torch.ones((x_noise.size(0), x_noise.size(1), rank), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
             else:
                 raise ValueError(f"Unsupported BLoB input rank {x_noise.dim()}, expected 2 or 3.")
 
@@ -413,6 +414,7 @@ def _official_blob_8bitlinear_forward(self, x: torch.Tensor, *args, **kwargs):
             sigma_a = _official_sigma_from_rho(self.lora_A_rho[active_adapter], self.bayes_eps)
             scaling = self.scaling[active_adapter]
             dropout = self.lora_dropout[active_adapter]
+            rank = int(lora_A.weight.shape[0])
             requires_conversion = not torch.is_autocast_enabled()
             x_noise = x
             if requires_conversion:
@@ -423,10 +425,10 @@ def _official_blob_8bitlinear_forward(self, x: torch.Tensor, *args, **kwargs):
 
             if x_noise.dim() == 2:
                 r_a = torch.ones((x_noise.size(0), self.in_features), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
-                s_a = torch.ones((x_noise.size(0), self.r[active_adapter]), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
+                s_a = torch.ones((x_noise.size(0), rank), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
             elif x_noise.dim() == 3:
                 r_a = torch.ones((x_noise.size(0), x_noise.size(1), self.in_features), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
-                s_a = torch.ones((x_noise.size(0), x_noise.size(1), self.r[active_adapter]), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
+                s_a = torch.ones((x_noise.size(0), x_noise.size(1), rank), device=x_noise.device, dtype=x_noise.dtype).uniform_(-1, 1).sign()
             else:
                 raise ValueError(f"Unsupported BLoB input rank {x_noise.dim()}, expected 2 or 3.")
 
@@ -824,7 +826,7 @@ def main():
     ap.add_argument("--max_seq_len", type=int, default=300)
     ap.add_argument("--train_steps", type=int, default=2000)
     ap.add_argument("--train_bsz", type=int, default=32)
-    ap.add_argument("--eval_bsz", type=int, default=128)
+    ap.add_argument("--eval_bsz", type=int, default=32)
     ap.add_argument("--grad_accum", type=int, default=1)
     ap.add_argument("--lr", type=float, default=5e-5)
     ap.add_argument("--warmup_ratio", type=float, default=0.06)

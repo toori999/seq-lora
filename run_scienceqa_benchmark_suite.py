@@ -76,6 +76,12 @@ ENSEMBLE_METRICS_RE = re.compile(
     r"NLL=(?P<nll>[0-9.]+)\s+ACC=(?P<acc>[0-9.]+)%\s+ECE=(?P<ece>[0-9.]+)%\s+"
     r"Brier=(?P<brier>[0-9.]+)(?:\s+members=(?P<members>[0-9.]+))?$"
 )
+TFB_HEADER_RE = re.compile(r"^\[(?P<tag>.+)\]\[TFB\]$")
+TFB_METRICS_RE = re.compile(
+    r"NLL=(?P<nll>[0-9.]+)\s+ACC=(?P<acc>[0-9.]+)%\s+ECE=(?P<ece>[0-9.]+)%\s+"
+    r"Brier=(?P<brier>[0-9.]+)\s+mc=(?P<mc>[0-9.]+)\s+beta=(?P<beta>[0-9.]+)"
+)
+TFB_SAVE_RE = re.compile(r"^\[Save\] TFB fit info -> (?P<path>.+)$")
 
 
 @dataclass(frozen=True)
@@ -311,6 +317,24 @@ def parse_map_eval_output(
             )
         )
     return rows
+
+
+def parse_map_train_output(
+    text: str,
+    seed: int,
+    source_order: str,
+    wall_time_sec: float,
+) -> Tuple[List[Dict[str, object]], Optional[float]]:
+    del seed, source_order
+    stage_times = parse_stage_times(text)
+    train_time_sec = None
+    for tag, sec in stage_times.items():
+        if tag.startswith("TRAIN MAP on "):
+            train_time_sec = sec
+            break
+    if train_time_sec is None:
+        train_time_sec = float(wall_time_sec)
+    return [], train_time_sec
 
 
 def parse_mcdrop_output(
@@ -563,6 +587,109 @@ def parse_ensemble_output(
     return rows
 
 
+def parse_tfb_output(
+    text: str,
+    seed: int,
+    source_order: str,
+    wall_time_sec: float,
+) -> Tuple[List[Dict[str, object]], Optional[float]]:
+    del source_order
+    stage_times = parse_stage_times(text)
+    stage_peaks = parse_stage_peaks(text)
+    train_time_sec = None
+    for tag, sec in stage_times.items():
+        if tag.startswith("FIT TFB on "):
+            train_time_sec = sec
+            break
+
+    rows: List[Dict[str, object]] = []
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        m_header = TFB_HEADER_RE.match(line.strip())
+        if not m_header or idx + 1 >= len(lines):
+            continue
+        tag = m_header.group("tag")
+        m_metrics = TFB_METRICS_RE.search(lines[idx + 1].strip())
+        if not m_metrics:
+            continue
+        eval_task, split = split_parenthetical_tag(tag)
+        infer_tag = f"INFER TFB on {tag}"
+        infer_peak_alloc_gb, infer_peak_reserved_gb = _get_stage_peak(stage_peaks, infer_tag)
+        rows.append(
+            make_result_row(
+                method="tfb_order",
+                seed=seed,
+                source_order="order",
+                eval_task=eval_task,
+                split=split,
+                nll=float(m_metrics.group("nll")),
+                acc_pct=float(m_metrics.group("acc")),
+                ece_pct=float(m_metrics.group("ece")),
+                brier=float(m_metrics.group("brier")),
+                infer_time_sec=stage_times.get(infer_tag),
+                infer_peak_alloc_gb=infer_peak_alloc_gb,
+                infer_peak_reserved_gb=infer_peak_reserved_gb,
+                train_time_sec=train_time_sec,
+                wall_time_sec=wall_time_sec,
+                extras={
+                    "mc_samples": float(m_metrics.group("mc")),
+                    "tfb_beta": float(m_metrics.group("beta")),
+                },
+            )
+        )
+    return rows, train_time_sec
+
+
+def build_tfb_payload_from_log(log_path: Path) -> Optional[Dict[str, object]]:
+    m = re.match(r"^tfb_order_seed(?P<seed>\d+)$", log_path.stem)
+    if not m:
+        return None
+
+    seed = int(m.group("seed"))
+    text = log_path.read_text(encoding="utf-8", errors="replace")
+    stage_times = parse_stage_times(text)
+    stage_peaks = parse_stage_peaks(text)
+    wall_time_sec = float(sum(stage_times.values())) if stage_times else 0.0
+    results, train_time_sec = parse_tfb_output(text, seed=seed, source_order="order", wall_time_sec=wall_time_sec)
+    if not results:
+        return None
+
+    fit_tag = next((tag for tag in stage_times if tag.startswith("FIT TFB on ")), None)
+    train_peak_alloc_gb = None
+    train_peak_reserved_gb = None
+    if fit_tag:
+        peak = stage_peaks.get(fit_tag)
+        if peak:
+            train_peak_alloc_gb = peak.get("alloc_gb")
+            train_peak_reserved_gb = peak.get("reserved_gb")
+
+    artifacts: Dict[str, str] = {}
+    for line in text.splitlines():
+        m_save = TFB_SAVE_RE.match(line.strip())
+        if m_save:
+            artifacts["tfb_fit_json"] = m_save.group("path")
+            break
+
+    return {
+        "name": log_path.stem,
+        "seed": seed,
+        "source_order": "order",
+        "command": [],
+        "started_at": None,
+        "finished_at": None,
+        "returncode": 0,
+        "wall_time_sec": wall_time_sec,
+        "log_path": str(log_path),
+        "artifacts": artifacts,
+        "stage_times_sec": stage_times,
+        "stage_peaks_gb": stage_peaks,
+        "train_time_sec": train_time_sec,
+        "train_peak_alloc_gb": train_peak_alloc_gb,
+        "train_peak_reserved_gb": train_peak_reserved_gb,
+        "results": results,
+    }
+
+
 def write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -725,9 +852,13 @@ def summarize_command_rows(command_rows: Sequence[Dict[str, object]]) -> List[Di
 
 def summarize_training_resources(command_rows: Sequence[Dict[str, object]]) -> List[Dict[str, object]]:
     families = {
+        "map_order": "train_map_order",
+        "map_reverse": "train_map_reverse",
+        "map_random": "train_map_random",
         "seq": "seq_constantq_order",
         "laplace": "laplace_order",
         "blob": "blob_order",
+        "tfb": "tfb_order",
     }
     out: List[Dict[str, object]] = []
     for family, prefix in families.items():
@@ -788,6 +919,8 @@ def _infer_stage_tag_from_row(command_name: str, row: Dict[str, object]) -> Opti
     if method == "blob_samp_order":
         mc_samples = int(float(row.get("mc_samples", 0)))
         return f"EVAL blob_sample(N={mc_samples}) on {eval_task}"
+    if method == "tfb_order":
+        return f"INFER TFB on {eval_task}({split})"
     return None
 
 
@@ -827,6 +960,45 @@ def collect_status_rows(status_dir: Path) -> Tuple[List[Dict[str, object]], List
         for row in payload.get("results", []):
             if isinstance(row, dict):
                 metrics_rows.append(_augment_result_row_with_infer_peaks(command_name, row, stage_peaks))
+
+    existing_command_names = {str(row.get("name", "")) for row in command_rows}
+    logs_dir = status_dir.parent / "logs"
+    for log_path in sorted(logs_dir.glob("tfb_order_seed*.log")):
+        if log_path.stem in existing_command_names:
+            continue
+        payload = build_tfb_payload_from_log(log_path)
+        if not payload:
+            continue
+        command_rows.append(payload)
+        existing_command_names.add(str(payload.get("name", "")))
+        stage_peaks = payload.get("stage_peaks_gb", {})
+        if not isinstance(stage_peaks, dict):
+            stage_peaks = {}
+        for row in payload.get("results", []):
+            if isinstance(row, dict):
+                metrics_rows.append(_augment_result_row_with_infer_peaks(str(payload.get("name", "")), row, stage_peaks))
+
+    map_train_by_key: Dict[Tuple[str, int], Dict[str, object]] = {}
+    for payload in command_rows:
+        name = str(payload.get("name", ""))
+        m = re.match(r"^train_map_(order|reverse|random)_seed(?P<seed>\d+)$", name)
+        if not m:
+            continue
+        order_key = m.group(1)
+        seed = int(m.group("seed"))
+        map_train_by_key[(order_key, seed)] = payload
+
+    for row in metrics_rows:
+        method = str(row.get("method", ""))
+        if method not in {"map_order", "map_reverse", "map_random"}:
+            continue
+        order_key = method.replace("map_", "", 1)
+        seed = int(row.get("seed"))
+        payload = map_train_by_key.get((order_key, seed))
+        if not payload:
+            continue
+        if row.get("train_time_sec") in (None, ""):
+            row["train_time_sec"] = payload.get("train_time_sec")
     return metrics_rows, command_rows
 
 
@@ -902,7 +1074,9 @@ def run_and_record(
     train_peak_alloc_gb = None
     train_peak_reserved_gb = None
     train_peak_tags: List[str] = []
-    if name.startswith("seq_constantq_order"):
+    if name.startswith("train_map_"):
+        train_peak_tags = [tag for tag in stage_peaks if tag.startswith("TRAIN MAP on ")]
+    elif name.startswith("seq_constantq_order"):
         train_peak_tags = [tag for tag in stage_peaks if tag.startswith("TRAIN-STAGE Seq-LoRA posterior build on ")]
     elif name.startswith("laplace_order"):
         train_peak_tags = [tag for tag in stage_peaks if tag.startswith("OFFICIAL SOURCE Laplace fit on ")]
@@ -1036,8 +1210,9 @@ def build_seq_command(
     slice_dir: Path,
     eval_tasks: Sequence[str],
     constant_q_var: float,
+    seq_mc_eval_chunk: int = 0,
 ) -> List[str]:
-    return [
+    cmd = [
         sys.executable,
         "seq_eval_iid_constantq.py",
         "--task",
@@ -1053,6 +1228,9 @@ def build_seq_command(
         "--forecast_horizon",
         "0",
     ]
+    if int(seq_mc_eval_chunk) > 0:
+        cmd.extend(["--mc_eval_chunk", str(int(seq_mc_eval_chunk))])
+    return cmd
 
 
 def build_laplace_command(
@@ -1165,6 +1343,7 @@ def main() -> None:
     parser.add_argument("--map_grad_accum", type=int, default=2)
     parser.add_argument("--map_eval_bsz", type=int, default=32)
     parser.add_argument("--constant_q_var", type=float, default=1.0)
+    parser.add_argument("--seq_mc_eval_chunk", type=int, default=0)
     parser.add_argument("--blob_eval_n", type=int, default=10)
     parser.add_argument("--mcdrop_mc_samples", type=int, default=32)
     parser.add_argument("--mcdrop_temp", type=float, default=1.0)
@@ -1199,6 +1378,7 @@ def main() -> None:
             "map_grad_accum": int(args.map_grad_accum),
             "map_eval_bsz": int(args.map_eval_bsz),
             "constant_q_var": float(args.constant_q_var),
+            "seq_mc_eval_chunk": int(args.seq_mc_eval_chunk),
             "blob_eval_n": int(args.blob_eval_n),
             "mcdrop_mc_samples": int(args.mcdrop_mc_samples),
             "mcdrop_temp": float(args.mcdrop_temp),
@@ -1237,7 +1417,7 @@ def main() -> None:
                     int(args.map_grad_accum),
                     int(args.map_eval_bsz),
                 ),
-                parser_fn=parse_train_wall_only,
+                parser_fn=parse_map_train_output,
                 result_root=result_root,
                 cwd=cwd,
                 seed=seed,
@@ -1299,6 +1479,7 @@ def main() -> None:
                 slice_dir=order_cfg.slice_dir,
                 eval_tasks=eval_tasks,
                 constant_q_var=float(args.constant_q_var),
+                seq_mc_eval_chunk=int(args.seq_mc_eval_chunk),
             ),
             parser_fn=parse_seq_output,
             result_root=result_root,

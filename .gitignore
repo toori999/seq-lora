@@ -25,3 +25,6 @@ iid_qwen35_8b_scienceqa_lora_map_leftpad_random/
 iid_qwen35_8b_scienceqa_lora_map_leftpad_reversegrade/
 outputs_laplace_official_source_qv_lmhead/
 outputs_laplace_official_source_qv_lmhead_suite/
+checkpoints/
+outputs_tfb_qv_lmhead_suite/
+outputs_tfb_on_blob_qv_lmhead_suite/
