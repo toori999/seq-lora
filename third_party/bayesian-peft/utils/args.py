@@ -2,6 +2,17 @@ from argparse import ArgumentParser
 import math
 
 
+def _str2bool(value):
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise ValueError(f"Cannot interpret boolean value from: {value!r}")
+
+
 def add_experiment_args(parser: ArgumentParser) -> None:
     """
     Adds the arguments used by all the models.
@@ -52,9 +63,9 @@ def add_experiment_args(parser: ArgumentParser) -> None:
     )
     parser.add_argument(
         "--load-in-8bit",
-        type=bool,
-        default=True,
-        help="Whether to load the model weights in 8-bit precision for memory optimization. Default is True.",
+        type=_str2bool,
+        default=False,
+        help="Whether to load the model weights in 8-bit precision for memory optimization. Default is False.",
     )
 
     # Optimization-specific arguments

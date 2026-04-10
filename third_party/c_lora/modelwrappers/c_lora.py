@@ -18,7 +18,10 @@ from transformers import PreTrainedModel
 
 from peft.config import PeftConfig
 from peft.tuners.lora import LoraLayer, Linear
-from peft.tuners.lora.bnb import Linear8bitLt
+try:
+    from peft.tuners.lora.bnb import Linear8bitLt
+except Exception:
+    Linear8bitLt = None
 
 
 torch.autograd.set_detect_anomaly(True)
@@ -475,7 +478,7 @@ class clora(WrapperBaseeceprf):
                 # add new methods
                 setattr(child, 'div_posterior_prior', div_posterior_prior.__get__(child, child.__class__))
                 setattr(child, 'sample', sample.__get__(child, child.__class__))
-            if isinstance(child, LoraLayer) and isinstance(child, Linear8bitLt):
+            if Linear8bitLt is not None and isinstance(child, LoraLayer) and isinstance(child, Linear8bitLt):
                 setattr(child, 'update_layer', update_lora_layer.__get__(child, child.__class__))
                 child.update_layer(child._active_adapter)
                 self._wrap_lora_layer(child)

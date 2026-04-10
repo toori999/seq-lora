@@ -4,6 +4,18 @@
 from argparse import ArgumentParser
 import math
 
+
+def _str2bool(value):
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise ValueError(f"Cannot interpret boolean value from: {value!r}")
+
+
 def add_experiment_args(parser: ArgumentParser) -> None:
     """
     Adds the arguments used by all the models.
@@ -23,7 +35,7 @@ def add_experiment_args(parser: ArgumentParser) -> None:
                         help='Backbone type, one of the following: roberta-base, roberta-large')
     parser.add_argument('--model-type', type=str, required=True,
                         help='Backbone type, one of the following: roberta-base, roberta-large')
-    parser.add_argument('--load-in-8bit', type=bool, default=True, 
+    parser.add_argument('--load-in-8bit', type=_str2bool, default=False,
                         help='Whether to load the model in 8-bit.')
     
     # Optimization-specfiic arguments

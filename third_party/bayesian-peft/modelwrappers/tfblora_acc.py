@@ -9,7 +9,10 @@ from utils.args import add_management_args, add_experiment_args, ArgumentParser
 from run.evaluation import *
 
 from peft.tuners.lora import LoraLayer, Linear
-from peft.tuners.lora.bnb import Linear8bitLt
+try:
+    from peft.tuners.lora.bnb import Linear8bitLt
+except Exception:
+    Linear8bitLt = None
 
 from transformers import PreTrainedModel
 from peft.config import PeftConfig
@@ -18,6 +21,10 @@ from .blob import blob_linear_forward, sample, blob_8bitlinear_forward, BLoBConf
 
 import logging
 import time
+
+
+def _is_lora_linear_module(module):
+    return isinstance(module, Linear) or (Linear8bitLt is not None and isinstance(module, Linear8bitLt))
 
 
 ## Model Specific Argument Parsing
@@ -75,7 +82,7 @@ class TFBLoRAACC(WrapperBase):
 
         def extract_lora_layers(module):
             for child in module.children():
-                if isinstance(child, (Linear8bitLt, Linear)):
+                if _is_lora_linear_module(child):
                     self.lora_layers.append(child)
                 else:
                     extract_lora_layers(child)
@@ -199,7 +206,7 @@ class TFBLoRAACC(WrapperBase):
                 setattr(layer, 'forward', blob_linear_forward.__get__(layer, layer.__class__))
                 # add new methods
                 setattr(layer, 'sample', sample.__get__(layer, layer.__class__))
-            elif isinstance(layer, LoraLayer) and isinstance(layer, Linear8bitLt):
+            elif Linear8bitLt is not None and isinstance(layer, LoraLayer) and isinstance(layer, Linear8bitLt):
                 self._wrap_lora_layer_var_infer(layer)
                 # modify existing methods
                 setattr(layer, 'forward', blob_8bitlinear_forward.__get__(layer, layer.__class__))
@@ -245,7 +252,7 @@ class TFBLoRAACC(WrapperBase):
         for layer in layers:
             if isinstance(layer, LoraLayer) and isinstance(layer, Linear):
                 self._update_lora_layer_var_infer(layer, beta)
-            elif isinstance(layer, LoraLayer) and isinstance(layer, Linear8bitLt):
+            elif Linear8bitLt is not None and isinstance(layer, LoraLayer) and isinstance(layer, Linear8bitLt):
                 self._update_lora_layer_var_infer(layer, beta)
             else:
                 print(layer)

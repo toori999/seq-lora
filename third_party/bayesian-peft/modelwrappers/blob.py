@@ -17,7 +17,10 @@ from transformers import PreTrainedModel
 
 from peft.config import PeftConfig
 from peft.tuners.lora import LoraLayer, Linear
-from peft.tuners.lora.bnb import Linear8bitLt
+try:
+    from peft.tuners.lora.bnb import Linear8bitLt
+except Exception:
+    Linear8bitLt = None
 
 
 ## Model Specific Argument Parsing
@@ -393,7 +396,7 @@ class BLoB(WrapperBase):
                     div_posterior_prior.__get__(child, child.__class__),
                 )
                 setattr(child, "sample", sample.__get__(child, child.__class__))
-            if isinstance(child, LoraLayer) and isinstance(child, Linear8bitLt):
+            if Linear8bitLt is not None and isinstance(child, LoraLayer) and isinstance(child, Linear8bitLt):
                 self._wrap_lora_layer(child)
                 # modify existing methods
                 setattr(

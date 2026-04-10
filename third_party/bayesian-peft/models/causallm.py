@@ -13,6 +13,53 @@ from peft import (
 )
 
 
+def _default_torch_dtype():
+    return torch.bfloat16 if torch.cuda.is_available() else None
+
+
+def _is_bitsandbytes_runtime_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    markers = (
+        "bitsandbytes",
+        "bnb8bitquantize",
+        "cuda setup error",
+        "libnvjitlink",
+        "automatic conversion of the weights",
+        "int8_vectorwise_quant",
+    )
+    return any(marker in message for marker in markers)
+
+
+def _load_causal_lm(model_name_or_path: str, load_in_8bit: bool):
+    load_kwargs = {}
+    if load_in_8bit:
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+    else:
+        torch_dtype = _default_torch_dtype()
+        if torch_dtype is not None:
+            load_kwargs["torch_dtype"] = torch_dtype
+
+    try:
+        return AutoModelForCausalLM.from_pretrained(model_name_or_path, **load_kwargs), load_in_8bit
+    except Exception as exc:
+        if not load_in_8bit or not _is_bitsandbytes_runtime_error(exc):
+            raise
+        error_summary = next(
+            (line.strip() for line in str(exc).splitlines() if line.strip()),
+            type(exc).__name__,
+        )
+        print(
+            "[WARN] 8-bit model loading failed; retrying without bitsandbytes quantization. "
+            f"Original error: {error_summary}",
+            flush=True,
+        )
+        fallback_kwargs = {}
+        torch_dtype = _default_torch_dtype()
+        if torch_dtype is not None:
+            fallback_kwargs["torch_dtype"] = torch_dtype
+        return AutoModelForCausalLM.from_pretrained(model_name_or_path, **fallback_kwargs), False
+
+
 def _get_single_token_id(tokenizer, s: str) -> int:
     ids = tokenizer.encode(s, add_special_tokens=False)
     if len(ids) == 1:
@@ -71,14 +118,15 @@ class CausalLM(nn.Module):
         if accelerator is not None:
             accelerator.wait_for_everyone()
 
-        bnb_config = BitsAndBytesConfig(load_in_8bit=args.load_in_8bit)
         if args.load_model_path is not None:
-            model = AutoModelForCausalLM.from_pretrained(
-                args.load_model_path, quantization_config=bnb_config
+            model, args.load_in_8bit = _load_causal_lm(
+                args.load_model_path,
+                load_in_8bit=args.load_in_8bit,
             )
         else:
-            model = AutoModelForCausalLM.from_pretrained(
-                args.model, quantization_config=bnb_config
+            model, args.load_in_8bit = _load_causal_lm(
+                args.model,
+                load_in_8bit=args.load_in_8bit,
             )
 
         if str(args.dataset_type).strip().lower() == "benchmark_mcdataset":
