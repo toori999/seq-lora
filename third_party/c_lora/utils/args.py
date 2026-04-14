@@ -49,6 +49,12 @@ def add_experiment_args(parser: ArgumentParser) -> None:
     )
     parser.add_argument('--batch-size', type=int,
                         help='Batch size.')
+    parser.add_argument(
+        "--eval-batch-size",
+        type=int,
+        default=48,
+        help="Batch size for evaluation loaders. Default is 48.",
+    )
     parser.add_argument('--lr', type=float, default=0.0001,
                         help='Learning rate.')
     parser.add_argument('--opt', type=str, default='adamw',
@@ -72,9 +78,15 @@ def add_experiment_args(parser: ArgumentParser) -> None:
     )
     parser.add_argument('--eval-steps', type=int, default=0,
                         help='set 0 to disable')
-    parser.add_argument('--num-bins', type=int, default=15,
+    parser.add_argument('--num-bins', type=int, default=10,
                         help='num of bins in ECE computation.')
     parser.add_argument('--load-model-path', type=str, default=None)
+    parser.add_argument('--shared-init-lora-path', type=str, default=None,
+                        help='Path to a normalized shared LoRA init state dict (e.g. init_lora.pt).')
+    parser.add_argument('--save-clora-dir', type=str, default=None,
+                        help='C-LoRA-only: save adapter plus clora_extra.pt to this directory after training.')
+    parser.add_argument('--load-clora-dir', type=str, default=None,
+                        help='C-LoRA-only: load adapter plus clora_extra.pt from this directory.')
     parser.add_argument('--load-checkpoint', action='store_true',
                         help='Whether to load checkpoint.')
     parser.add_argument('--log-path', type=str, default='default')
@@ -82,7 +94,9 @@ def add_experiment_args(parser: ArgumentParser) -> None:
     parser.add_argument("--testing_set", "--testing-set", dest="testing_set", type=str, default='val')
     parser.add_argument("--ood-ori-dataset", type=str, default=None)
     parser.add_argument("--eval-dataset", type=str, default="",
-                        help="Benchmark eval dataset name. For benchmark_mcdataset, empty/iid means source task IID split.")
+                        help="Benchmark eval dataset name. For benchmark_mcdataset, empty/iid means source task IID split. "
+                             "Supports comma-separated task lists such as "
+                             "'iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main'.")
     
     # LoRA arguments
     parser.add_argument('--lora-r', type=int, default=8)

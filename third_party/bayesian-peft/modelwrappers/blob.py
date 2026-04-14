@@ -11,7 +11,7 @@ import re
 from tqdm import tqdm
 from pathlib import Path
 
-from .wrapperbase import WrapperBase, get_linear_schedule_with_warmup
+from .wrapperbase import WrapperBase, _get_torchmetrics, get_linear_schedule_with_warmup
 from utils.args import add_management_args, add_experiment_args, ArgumentParser
 from run.evaluation import *
 from utils import StageTimer, create_if_not_exists
@@ -760,6 +760,7 @@ class BLoB(WrapperBase):
         self.eval()
         status = self.training
         nlls = AverageMeter()
+        Accuracy, CalibrationError = _get_torchmetrics()
         metric_kwargs = {"task": "multiclass", "num_classes": self.num_classes}
         acc_metric = Accuracy(**metric_kwargs).to(self.accelerator.device)
         ece_metric = CalibrationError(**metric_kwargs, n_bins=self.args.num_bins).to(

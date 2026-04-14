@@ -11,7 +11,6 @@ import torch
 from torch.optim import SGD, Adam, AdamW
 from torch.optim.lr_scheduler import LambdaLR
 from torch.nn import functional as F
-from torchmetrics import Accuracy, CalibrationError
 
 from transformers import PreTrainedModel
 from peft import PeftModel
@@ -24,6 +23,24 @@ optimizer_dict = {
     "adam": Adam,
     "adamw": AdamW,
 }
+
+_TORCHMETRICS_IMPORT_ERROR = None
+
+
+def _get_torchmetrics():
+    global _TORCHMETRICS_IMPORT_ERROR
+
+    try:
+        from torchmetrics import Accuracy, CalibrationError
+
+        return Accuracy, CalibrationError
+    except Exception as exc:  # pragma: no cover - environment dependent
+        _TORCHMETRICS_IMPORT_ERROR = exc
+        raise RuntimeError(
+            "Failed to import torchmetrics (and its scipy dependency). "
+            "For benchmark_mcdataset this should no longer be needed at import time, "
+            "but non-benchmark evaluation paths still require a healthy torchmetrics/scipy install."
+        ) from exc
 
 
 def _is_mc_dataset_type(dataset_type: str) -> bool:
@@ -253,6 +270,7 @@ class WrapperBase(PeftModel):
         self.eval()
         status = self.training
         nlls = AverageMeter()
+        Accuracy, CalibrationError = _get_torchmetrics()
         metric_kwargs = {"task": "multiclass", "num_classes": self.num_classes}
         acc_metric = Accuracy(**metric_kwargs).to(self.accelerator.device)
         ece_metric = CalibrationError(**metric_kwargs, n_bins=self.args.num_bins).to(

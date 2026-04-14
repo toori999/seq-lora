@@ -105,7 +105,7 @@ class WrapperBaseeceprf(PeftModel):
         if args.max_train_steps == 0 :
             num_training_steps = args.num_samples * args.n_epochs // args.batch_size
         else:
-            num_training_steps = 5000 
+            num_training_steps = args.max_train_steps
         warmup_steps = num_training_steps * args.warmup_ratio 
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [

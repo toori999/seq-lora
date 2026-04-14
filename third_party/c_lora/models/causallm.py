@@ -12,6 +12,10 @@ from peft import (
 )
 
 
+def _is_benchmark_mc_dataset(args) -> bool:
+    return str(getattr(args, "dataset_type", "")).strip().lower() == "benchmark_mcdataset"
+
+
 def _get_single_token_id(tokenizer, s: str) -> int:
     ids = tokenizer.encode(s, add_special_tokens=False)
     if len(ids) == 1:
@@ -64,14 +68,63 @@ def _trim_lm_head_to_choice_tokens(model: nn.Module, choice_token_ids: torch.Ten
         base.config.vocab_size = new_out
 
 
+def _resolve_all_layer_target_modules(
+    model: nn.Module,
+    include_k_proj: bool = False,
+    include_lm_head: bool = False,
+):
+    wanted_attention = {"q_proj", "v_proj"}
+    if include_k_proj:
+        wanted_attention.add("k_proj")
+    wanted_lm_head = {"lm_head"} if include_lm_head else set()
+    resolved = []
+    for name, module in model.named_modules():
+        if not isinstance(module, nn.Linear):
+            continue
+        suffix = name.rsplit(".", 1)[-1]
+        if ".layers." in name and ".self_attn." in name and suffix in wanted_attention:
+            resolved.append(name)
+            continue
+        if wanted_lm_head and (name in wanted_lm_head or suffix in wanted_lm_head):
+            resolved.append(name)
+    if not resolved:
+        raise RuntimeError("Could not resolve any benchmark LoRA target modules.")
+    return sorted(set(resolved))
+
+
 class CausalLM(nn.Module):
     def __init__(self, args, accelerator=None, **kwargs) -> None:
         super().__init__()
         if accelerator is not None:
             accelerator.wait_for_everyone()
 
-        bnb_config = BitsAndBytesConfig(load_in_8bit=args.load_in_8bit)
-        if args.load_checkpoint:
+        benchmark_mc = _is_benchmark_mc_dataset(args)
+        if benchmark_mc:
+            device = accelerator.device if accelerator is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            amp_dtype = (
+                torch.bfloat16
+                if (device.type == "cuda" and torch.cuda.is_bf16_supported())
+                else (torch.float16 if device.type == "cuda" else None)
+            )
+            model_name_or_path = args.load_model_path if args.load_model_path is not None else args.model
+            load_kwargs = dict(
+                pretrained_model_name_or_path=model_name_or_path,
+                torch_dtype=amp_dtype,
+                trust_remote_code=False,
+            )
+            try:
+                model = AutoModelForCausalLM.from_pretrained(
+                    **load_kwargs,
+                    attn_implementation="sdpa",
+                )
+            except Exception:
+                model = AutoModelForCausalLM.from_pretrained(**load_kwargs)
+            if hasattr(model.config, "use_cache"):
+                model.config.use_cache = False
+        else:
+            bnb_config = BitsAndBytesConfig(load_in_8bit=args.load_in_8bit)
+
+        if not benchmark_mc and args.load_checkpoint:
             load_path = getattr(args, "load_path", None)
             if load_path is None:
                 load_path = f"checkpoints/{args.modelwrapper}/{args.model}/{args.dataset}/{args.load_model_path}"
@@ -79,42 +132,44 @@ class CausalLM(nn.Module):
             print("Loading model from:", load_path)
             peft_config = PeftConfig.from_pretrained(load_path, is_trainable=True)
             model = AutoModelForCausalLM.from_pretrained(peft_config.base_model_name_or_path, quantization_config=bnb_config)
-            if str(args.dataset_type).strip().lower() == "benchmark_mcdataset":
-                num_classes = int(getattr(args, "outdim", 0) or 0)
-                if num_classes <= 0:
-                    raise ValueError("benchmark_mcdataset requires args.outdim > 0 before model construction.")
-                tokenizer_ref = peft_config.base_model_name_or_path
-                choice_token_ids = _get_choice_token_ids(tokenizer_ref, num_classes)
-                _trim_lm_head_to_choice_tokens(model, choice_token_ids)
-                print(f"[Head] trimmed lm_head to {num_classes} choice logits")
         else:
-            if args.load_model_path is not None:
+            if benchmark_mc:
+                peft_config = None
+            elif args.load_model_path is not None:
                 model = AutoModelForCausalLM.from_pretrained(args.load_model_path, quantization_config=bnb_config)
             else:
                 model = AutoModelForCausalLM.from_pretrained(args.model, quantization_config=bnb_config)
 
-            if str(args.dataset_type).strip().lower() == "benchmark_mcdataset":
-                num_classes = int(getattr(args, "outdim", 0) or 0)
-                if num_classes <= 0:
-                    raise ValueError("benchmark_mcdataset requires args.outdim > 0 before model construction.")
-                tokenizer_ref = args.load_model_path if args.load_model_path is not None else args.model
-                choice_token_ids = _get_choice_token_ids(tokenizer_ref, num_classes)
-                _trim_lm_head_to_choice_tokens(model, choice_token_ids)
-                print(f"[Head] trimmed lm_head to {num_classes} choice logits")
+        if benchmark_mc:
+            num_classes = int(getattr(args, "outdim", 0) or 0)
+            if num_classes <= 0:
+                raise ValueError("benchmark_mcdataset requires args.outdim > 0 before model construction.")
+            tokenizer_ref = args.load_model_path if args.load_model_path is not None else args.model
+            choice_token_ids = _get_choice_token_ids(tokenizer_ref, num_classes)
+            _trim_lm_head_to_choice_tokens(model, choice_token_ids)
+            print(f"[Head] trimmed lm_head to {num_classes} choice logits")
 
-            if args.apply_classhead_lora:
-                target_modules = ["q_proj", "v_proj", "lm_head"]
-            elif args.apply_qkv_head_lora:
-                target_modules = ["q_proj", "v_proj", "k_proj", "lm_head"]
-            else:
-                target_modules = ["q_proj", "v_proj"]
+        if benchmark_mc and args.apply_classhead_lora:
+            target_modules = _resolve_all_layer_target_modules(model, include_k_proj=False, include_lm_head=True)
+        elif benchmark_mc and args.apply_qkv_head_lora:
+            target_modules = _resolve_all_layer_target_modules(model, include_k_proj=True, include_lm_head=True)
+        elif benchmark_mc:
+            target_modules = _resolve_all_layer_target_modules(model, include_k_proj=False, include_lm_head=False)
+        elif args.apply_classhead_lora:
+            target_modules = ["q_proj", "v_proj", "lm_head"]
+        elif args.apply_qkv_head_lora:
+            target_modules = ["q_proj", "v_proj", "k_proj", "lm_head"]
+        else:
+            target_modules = ["q_proj", "v_proj"]
 
+        if peft_config is None:
             peft_config = LoraConfig(
                 task_type="CAUSAL_LM",
                 inference_mode=False,
                 r=args.lora_r,
                 lora_alpha=args.lora_alpha,
                 lora_dropout=args.lora_dropout,
+                bias="none",
                 target_modules=target_modules,
             )
 

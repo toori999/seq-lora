@@ -2,7 +2,6 @@ import numpy as np
 import torch
 
 from torch.nn import functional as F
-from torchmetrics import Accuracy, CalibrationError
 from utils import create_if_not_exists
 import os
 

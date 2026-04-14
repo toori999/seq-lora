@@ -1,17 +1,23 @@
+import logging
+import os
+import re
+import sys
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim import SGD
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 import math
 from tqdm import tqdm
 from torch.nn.utils import clip_grad_norm_
+from pathlib import Path
 
 from .wrapperbase_ece_prf import WrapperBaseeceprf, get_linear_schedule_with_warmup, get_cnst_schedule_with_warmup, _is_mc_dataset_type
 from utils.args import add_management_args, add_experiment_args, ArgumentParser
 from run.evaluation import *
 import time
+from utils import StageTimer, create_if_not_exists
 # from run.temperature_scaling import ModelWithTemperature ################ Trying to use Temperature scaling ...
 
 from transformers import PreTrainedModel
@@ -51,6 +57,10 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--bayes-inference-notsample', action='store_true',
                         help='Whether to sample during inference.')
     parser.add_argument('--bayes-kl-reweighting', type = int, default=1)  
+    parser.add_argument('--bayes-klreweighting', dest='bayes_klreweighting_flag', action='store_true',
+                        help='Alias for enabling KL reweighting.')
+    parser.add_argument('--bayes-datasetrescaling', action='store_true',
+                        help='Whether to use dataset rescaling for the KL schedule.')
     parser.add_argument('--bayes-opt2-wd', type = float, default = 0.0005) 
     # parser.add_argument('--bayes-kl-reweighting', action='store_true',
     #                     help='Whether to use reweighting.')
@@ -68,6 +78,97 @@ class LightBLoBConfig:
     bayes_eps: float = field(metadata={"help": "Bayes epsilon"})
     bayes_gamma: float = field(metadata={"help": "Bayes gamma"})
     bayes_beta: float = field(metadata={"help": "Bayes beta"})
+
+
+def _load_seq_lora_helpers():
+    try:
+        import common_eval_utils as ceu  # type: ignore
+
+        return ceu
+    except Exception:
+        pass
+
+    candidates = []
+    env_root = os.getenv("SEQ_LORA_ROOT")
+    if env_root:
+        candidates.append(Path(env_root))
+    candidates.append(Path.cwd())
+
+    for root in candidates:
+        root = Path(root)
+        if (root / "common_eval_utils.py").exists():
+            sys.path.insert(0, str(root))
+            import common_eval_utils as ceu  # type: ignore
+
+            return ceu
+
+    return None
+
+
+_CEU = _load_seq_lora_helpers()
+_LORA_ADAPTER_PLACEHOLDER = "__adapter__"
+_LORA_ADAPTER_RE = re.compile(r"(\.lora_(?:A|B)\.)([^.]+)(\.)")
+_CLORA_EXTRA_FILENAME = "clora_extra.pt"
+
+
+def _multiclass_brier_score(probs: torch.Tensor, labels: torch.Tensor) -> float:
+    one_hot = F.one_hot(labels, num_classes=probs.size(-1)).to(dtype=probs.dtype)
+    return float(((probs - one_hot) ** 2).sum(dim=-1).mean().item())
+
+
+def _normalize_lora_key(key: str) -> str:
+    return _LORA_ADAPTER_RE.sub(rf"\1{_LORA_ADAPTER_PLACEHOLDER}\3", key)
+
+
+def _denormalize_lora_key(key: str, adapter_name: str) -> str:
+    return key.replace(f".{_LORA_ADAPTER_PLACEHOLDER}.", f".{adapter_name}.")
+
+
+def _load_normalized_lora_state_dict(model: nn.Module, lora_state: Dict[str, torch.Tensor], adapter_name: str) -> None:
+    mapped = {_denormalize_lora_key(k, adapter_name): v for k, v in lora_state.items()}
+    model.load_state_dict(mapped, strict=False)
+
+
+def _resolve_clora_paths(clora_dir: str):
+    adapter_dir = clora_dir
+    if not os.path.exists(os.path.join(adapter_dir, "adapter_config.json")):
+        subdir = os.path.join(clora_dir, "clora")
+        if os.path.exists(os.path.join(subdir, "adapter_config.json")):
+            adapter_dir = subdir
+        else:
+            raise FileNotFoundError(
+                f"Could not find adapter_config.json in '{clora_dir}' or '{subdir}'"
+            )
+
+    extra_candidates = [
+        os.path.join(clora_dir, _CLORA_EXTRA_FILENAME),
+        os.path.join(adapter_dir, _CLORA_EXTRA_FILENAME),
+    ]
+    extra_path = next((path for path in extra_candidates if os.path.exists(path)), None)
+    if extra_path is None:
+        raise FileNotFoundError(f"Missing C-LoRA extra file. Tried: {extra_candidates}")
+    return adapter_dir, extra_path
+
+
+def _save_clora_extra_state(model: nn.Module, save_dir: str) -> str:
+    extra_state = {
+        key: value.detach().cpu()
+        for key, value in model.state_dict().items()
+        if ".lora_E." in key
+    }
+    if not extra_state:
+        raise RuntimeError("No lora_E weights found while saving C-LoRA extra state.")
+    path = os.path.join(save_dir, _CLORA_EXTRA_FILENAME)
+    torch.save(extra_state, path)
+    return path
+
+
+def _load_clora_extra_state(model: nn.Module, extra_path: str) -> None:
+    saved = torch.load(extra_path, map_location="cpu")
+    if not isinstance(saved, dict):
+        raise RuntimeError(f"Malformed C-LoRA extra state: {extra_path}")
+    model.load_state_dict(saved, strict=False)
+    print(f"[C-LoRA] loaded contextual state from: {extra_path}")
    
 def update_lora_layer(self, adapter_name):
     for adapter_name in self._active_adapter:
@@ -386,8 +487,22 @@ class clora(WrapperBaseeceprf):
         
         # self.my_kl_track = []
         self.lightblobconfig = LightBLoBConfig(bayes_eps = self.args.bayes_eps, bayes_gamma = self.args.bayes_gamma, bayes_beta = self.args.bayes_beta)
+        clora_adapter_dir = None
+        clora_extra_path = None
+        if getattr(args, "load_clora_dir", None) is not None:
+            clora_adapter_dir, clora_extra_path = _resolve_clora_paths(args.load_clora_dir)
+            print(f"[Load C-LoRA] adapter={clora_adapter_dir} extra={clora_extra_path}")
+        elif getattr(args, "shared_init_lora_path", None) is not None:
+            if not os.path.exists(args.shared_init_lora_path):
+                raise FileNotFoundError(f"Missing shared init LoRA file: {args.shared_init_lora_path}")
+            saved_init = torch.load(args.shared_init_lora_path, map_location="cpu")
+            _load_normalized_lora_state_dict(self, saved_init, adapter_name=adapter_name)
+            print(f"[Init LoRA] loaded shared init from {args.shared_init_lora_path}")
         self._modify_lora_layers(self.base_model)
-        if args.load_checkpoint:
+        if clora_adapter_dir is not None:
+            self.load_adapter(clora_adapter_dir, adapter_name)
+            _load_clora_extra_state(self, clora_extra_path)
+        elif args.load_checkpoint:
             self.load_adapter(args.load_path, adapter_name)
         
         self.i = 1 
@@ -396,7 +511,7 @@ class clora(WrapperBaseeceprf):
         self.train_n_samples = self.args.bayes_train_n_samples
         self.eval_n_samples = self.args.bayes_eval_n_samples
         
-        if self.args.bayes_kl_reweighting == 1:
+        if bool(getattr(self.args, "bayes_klreweighting_flag", False)) or self.args.bayes_kl_reweighting == 1:
             self.kl_reweighting = True
         else: 
             self.kl_reweighting = False
@@ -420,6 +535,23 @@ class clora(WrapperBaseeceprf):
         self.scheduler2 = get_linear_schedule_with_warmup(self.opt2, warmup_steps, num_training_steps)
         
         self.counter = 0
+
+    def _save_clora_checkpoint(self, save_dir: str) -> None:
+        self.accelerator.wait_for_everyone()
+        if not self.accelerator.is_main_process:
+            return
+
+        create_if_not_exists(save_dir)
+        original_base_model = self.base_model
+        try:
+            self.base_model = self.accelerator.unwrap_model(self.base_model)
+            self.save_pretrained(save_dir, save_function=self.accelerator.save)
+        finally:
+            self.base_model = original_base_model
+
+        extra_path = _save_clora_extra_state(self, save_dir)
+        print(f"[Save] saved C-LoRA adapter to: {save_dir}")
+        print(f"[Save] saved C-LoRA contextual state to: {extra_path}")
 
     def _uses_trimmed_mc_head(self) -> bool:
         return str(self.args.dataset_type).strip().lower() == "benchmark_mcdataset"
@@ -578,8 +710,170 @@ class clora(WrapperBaseeceprf):
                 for _ in range(n_samples):
                     res.append(self.base_model(**batch).logits)    
                 return torch.stack(res, dim = 1)
+
+    def _evaluate_benchmark_common(self, eval_loader, sample: bool, n_samples: int) -> Dict[str, float]:
+        if _CEU is None:
+            raise RuntimeError("common_eval_utils is required for benchmark_mcdataset evaluation.")
+
+        self.eval()
+        status = self.training
+        acc_metric = _CEU.make_accuracy(self.accelerator.device, self.num_classes)
+        ece_metric = _CEU.make_ece(self.accelerator.device, self.num_classes, int(self.args.num_bins))
+        acc_metric.reset()
+        ece_metric.reset()
+
+        total = 0
+        nll_sum = 0.0
+        all_probs: List[torch.Tensor] = []
+        all_labels: List[torch.Tensor] = []
+        samples_seen = 0
+
+        for step, batch in enumerate(eval_loader):
+            with torch.no_grad(), torch.inference_mode():
+                logits_samples = self.forward_logits(
+                    batch,
+                    sample=bool(sample),
+                    n_samples=max(int(n_samples), 1),
+                ).detach()
+                _, labels, _ = batch
+                logits_samples, labels = self.accelerator.gather([logits_samples, labels])
+                if self.accelerator.num_processes > 1:
+                    if step == len(eval_loader) - 1:
+                        keep = len(eval_loader.dataset) - samples_seen
+                        labels = labels[:keep]
+                        logits_samples = logits_samples[:keep]
+                    else:
+                        samples_seen += labels.shape[0]
+
+                bsz = int(labels.size(0))
+                total += bsz
+                if sample:
+                    probs = torch.softmax(logits_samples, dim=-1).mean(dim=1)
+                    idx = torch.arange(bsz, device=labels.device)
+                    nll_sum += float((-torch.log(probs[idx, labels].clamp_min(1e-12))).sum().item())
+                else:
+                    logits = logits_samples
+                    probs = torch.softmax(logits, dim=-1)
+                    nll_sum += float(F.cross_entropy(logits, labels, reduction="sum").item())
+
+                acc_metric.update(probs, labels)
+                ece_metric.update(probs, labels)
+                all_probs.append(probs.detach().cpu())
+                all_labels.append(labels.detach().cpu())
+
+        probs_all = (
+            torch.cat(all_probs, dim=0)
+            if all_probs
+            else torch.empty((0, self.num_classes), dtype=torch.float32)
+        )
+        labels_all = (
+            torch.cat(all_labels, dim=0)
+            if all_labels
+            else torch.empty((0,), dtype=torch.long)
+        )
+        self.train(status)
+        return {
+            "nll": nll_sum / max(total, 1),
+            "acc": float(acc_metric.compute().item()),
+            "ece": float(ece_metric.compute().item()),
+            "brier": _multiclass_brier_score(probs_all, labels_all) if total > 0 else float("nan"),
+        }
+
+    def _fit_benchmark_stepwise(self, train_loader, eval_loader, max_steps: Optional[int] = None):
+        nll_losses = AverageMeter()
+        kl_losses = AverageMeter()
+        elbo_losses = AverageMeter()
+        accs = AverageMeter()
+        target_steps = int(max_steps if max_steps is not None else self.args.max_train_steps)
+        if target_steps <= 0:
+            return
+
+        loader_iter = iter(train_loader)
+        with tqdm(total=target_steps, desc="Total Training Steps", leave=True) as pbar:
+            while self.global_step < target_steps:
+                try:
+                    batch = next(loader_iter)
+                except StopIteration:
+                    loader_iter = iter(train_loader)
+                    batch = next(loader_iter)
+
+                _, golds, _ = batch
+                logits = self.forward_logits(batch, sample=True, n_samples=self.train_n_samples).mean(1)
+                output = torch.log_softmax(logits, dim=1)
+                nll = self.loss(output, golds, reduction='mean')
+
+                self.accelerator.backward(nll, retain_graph=True)
+
+                kl_divs = []
+                for _ in range(self.train_n_samples):
+                    if hasattr(self.base_model, 'module'):
+                        kl_divs.append(self.div_posterior_prior(self.base_model.module))
+                    else:
+                        kl_divs.append(self.div_posterior_prior(self.base_model))
+
+                kl = torch.mean(torch.stack(kl_divs), dim=0) * (1 / float(65))
+                if self.kl_reweighting:
+                    cycle_step = self.M if self.i % self.M == 0 else self.i % self.M
+                    self.pi = 2**cycle_step / (2 ** (self.M + 1) - 1)
+                    self.i += 1
+                else:
+                    self.pi = 1 / self.M
+                kl_div = kl * self.pi * 0.000001
+
+                self.accelerator.backward(kl_div)
+
+                self.opt.step()
+                self.opt.zero_grad()
+                self.scheduler.step()
+
+                self.opt2.step()
+                self.opt2.zero_grad()
+                self.scheduler2.step()
+
+                acc = accuracy_topk(output.data, golds)
+                loss, acc, nll_loss, kl_loss = (
+                    float((kl + nll).detach().to(dtype=torch.float32).item()),
+                    acc.item(),
+                    float(nll.detach().to(dtype=torch.float32).item()),
+                    float(kl_div.detach().to(dtype=torch.float32).item()),
+                )
+
+                _, classes, _ = batch
+                references = self.accelerator.gather(classes)
+                len_batch = int(references.shape[0])
+                kl_losses.update(kl_loss, len_batch)
+                nll_losses.update(nll_loss, len_batch)
+                elbo_losses.update(loss, len_batch)
+                accs.update(acc, len_batch)
+
+                assert not math.isnan(nll_loss)
+                assert not math.isnan(kl_loss)
+                if self.accelerator.is_local_main_process and self.wandb_logger is not None:
+                    self.wandb_logger.log({
+                        'train_acc': accs.avg,
+                        'train_nll_loss': nll_losses.avg,
+                        'kl_loss': kl_losses.avg,
+                        'lr': self.opt.param_groups[0]['lr'],
+                        'kllr': self.opt2.param_groups[0]['lr'],
+                        'pi'+str(self.args.bayes_kl_reweighting): self.pi,
+                    })
+
+                self.global_step += 1
+                self.step += 1
+                pbar.update(1)
+                self._maybe_log_progress(
+                    stage="train",
+                    step_idx=self.global_step - 1,
+                    total_steps=target_steps,
+                    extra=f"nll={float(nll_loss):.4f}",
+                )
+                if self.args.eval_per_steps > 0 and self.step >= self.args.eval_per_steps:
+                    self.step -= self.args.eval_per_steps
+                    self.evaluate(eval_loader)
                 
-    def fit(self, train_loader, eval_loader):
+    def fit(self, train_loader, eval_loader, max_steps: Optional[int] = None):
+        if self._uses_trimmed_mc_head() and _CEU is not None:
+            return self._fit_benchmark_stepwise(train_loader, eval_loader, max_steps=max_steps)
         
         stop_criteria = torch.inf 
         # self.counter = 0
@@ -749,6 +1043,15 @@ class clora(WrapperBaseeceprf):
 
                     
     def evaluate(self, eval_loader, val_stat = None):
+        if self._uses_trimmed_mc_head() and _CEU is not None:
+            sample = not self.args.bayes_inference_notsample and int(self.eval_n_samples) > 0
+            metrics = self._evaluate_benchmark_common(
+                eval_loader,
+                sample=sample,
+                n_samples=(self.eval_n_samples if sample else 1),
+            )
+            return metrics["acc"], metrics["ece"], metrics["nll"], metrics["brier"]
+
         valid_best_performing = val_stat if val_stat != None else ""  
         self.temperature = nn.Parameter(torch.ones(1) * 1.5)
 
@@ -1001,10 +1304,173 @@ class clora(WrapperBaseeceprf):
                 })
         return val_acc, val_ece, val_nll, val_brier
 
+    def fit_evaluate(self):
+        if not (self._uses_trimmed_mc_head() and _CEU is not None):
+            return super().fit_evaluate()
+
+        if self.accelerator.is_local_main_process:
+            save_folder = f'checkpoints/{self.args.modelwrapper}/{self.args.model}/{self.args.dataset}/{self.args.log_path}'
+            create_if_not_exists(save_folder)
+            logging.basicConfig(
+                format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
+                level=logging.INFO,
+                filename=save_folder + '/log.txt',
+            )
+
+        dataset_obj = getattr(self, "dataset_obj", None)
+        source_task = str(getattr(dataset_obj, "source_task", self.args.dataset))
+        eval_task_name = str(getattr(dataset_obj, "eval_task_name", source_task))
+        eval_split_name = str(getattr(dataset_obj, "eval_split_name", "validation"))
+
+        effective_max_steps = int(self.args.max_train_steps)
+        if self.args.early_stop_steps > 0:
+            effective_max_steps = min(effective_max_steps, int(self.args.early_stop_steps))
+
+        with StageTimer(f"FIT C_LORA on {source_task}(train)"):
+            self.fit(self.train_loader, self.test_loader, max_steps=effective_max_steps)
+
+        if effective_max_steps > 0 and getattr(self.args, "save_clora_dir", None):
+            with StageTimer(f"SAVE C_LORA to {self.args.save_clora_dir}"):
+                self._save_clora_checkpoint(self.args.save_clora_dir)
+
+        final_eval_n = int(getattr(self.args, "bayes_eval_n_samples_final", self.eval_n_samples))
+        self.eval_n_samples = final_eval_n
+
+        eval_loaders = getattr(self, "eval_loaders", None) or {eval_task_name: self.test_loader}
+        eval_split_by_task = getattr(self, "eval_split_by_task", None) or {eval_task_name: eval_split_name}
+        for task_name, loader in eval_loaders.items():
+            split_name = str(eval_split_by_task.get(task_name, "ood"))
+            task_eval_tag = f"{task_name}({split_name})"
+            task_key = re.sub(r"[^0-9A-Za-z_]+", "_", str(task_name)).strip("_") or "eval"
+
+            with StageTimer(f"INFER C_LORA mean on {task_eval_tag}"):
+                m_mean = self._evaluate_benchmark_common(loader, sample=False, n_samples=1)
+            with StageTimer(f"INFER C_LORA samp on {task_eval_tag}"):
+                m_samp = self._evaluate_benchmark_common(loader, sample=True, n_samples=final_eval_n)
+
+            print(f"\n[{task_eval_tag} Results]")
+            print(
+                f"  C-LoRA mean : NLL={m_mean['nll']:.4f}  ACC={m_mean['acc']*100:.2f}%  "
+                f"ECE={m_mean['ece']*100:.2f}%  Brier={m_mean['brier']:.4f} (N=0)"
+            )
+            print(
+                f"  C-LoRA samp : NLL={m_samp['nll']:.4f}  ACC={m_samp['acc']*100:.2f}%  "
+                f"ECE={m_samp['ece']*100:.2f}%  Brier={m_samp['brier']:.4f} (N={final_eval_n})"
+            )
+
+            logging.info(
+                f"{task_key}.clora_mean: "
+                f"acc={m_mean['acc']}, ece={m_mean['ece']}, nll={m_mean['nll']}, brier={m_mean['brier']}"
+            )
+            logging.info(
+                f"{task_key}.clora_samp: "
+                f"acc={m_samp['acc']}, ece={m_samp['ece']}, nll={m_samp['nll']}, brier={m_samp['brier']}, mc={final_eval_n}"
+            )
+            if self.accelerator.is_local_main_process and self.wandb_logger is not None:
+                payload = {
+                    f"final_clora_mean_acc/{task_key}": m_mean["acc"],
+                    f"final_clora_mean_ece/{task_key}": m_mean["ece"],
+                    f"final_clora_mean_nll/{task_key}": m_mean["nll"],
+                    f"final_clora_mean_brier/{task_key}": m_mean["brier"],
+                    f"final_clora_samp_acc/{task_key}": m_samp["acc"],
+                    f"final_clora_samp_ece/{task_key}": m_samp["ece"],
+                    f"final_clora_samp_nll/{task_key}": m_samp["nll"],
+                    f"final_clora_samp_brier/{task_key}": m_samp["brier"],
+                }
+                if task_name == eval_task_name:
+                    payload.update(
+                        {
+                            "final_clora_mean_acc": m_mean["acc"],
+                            "final_clora_mean_ece": m_mean["ece"],
+                            "final_clora_mean_nll": m_mean["nll"],
+                            "final_clora_mean_brier": m_mean["brier"],
+                            "final_clora_samp_acc": m_samp["acc"],
+                            "final_clora_samp_ece": m_samp["ece"],
+                            "final_clora_samp_nll": m_samp["nll"],
+                            "final_clora_samp_brier": m_samp["brier"],
+                        }
+                    )
+                self.wandb_logger.log(payload)
+
     def prepare_for_fit_evaluate(self, dataset, wandb_logger=None):
         """
         Prepare the model for training and evaluation.
         """
+        if self._uses_trimmed_mc_head() and _CEU is not None:
+            self.wandb_logger = wandb_logger
+            self.dataset_obj = dataset
+            train_loader, test_loader = dataset.train_dataloader, dataset.test_dataloader
+            raw_eval_loaders = dict(getattr(dataset, "eval_loaders", {}) or {})
+            raw_eval_splits = dict(getattr(dataset, "eval_split_name_by_task", {}) or {})
+            source_task = str(getattr(dataset, "source_task", self.args.dataset))
+            val_loader = getattr(dataset, "val_dataloader", None)
+            if val_loader is not None:
+                self.val_loader = self.accelerator.prepare(val_loader)
+
+            self.tokenizer = dataset.tokenizer
+            self.target_ids = dataset.target_ids.squeeze(-1)
+
+            l_train = len(train_loader)
+            num_update_steps_per_epoch = len(train_loader)
+            if self.args.max_train_steps == 0:
+                self.args.max_train_steps = self.args.n_epochs * num_update_steps_per_epoch
+            self.args.n_epochs = math.ceil(self.args.max_train_steps / num_update_steps_per_epoch) if self.args.ood_ori_dataset is None else 0
+            if self.accelerator.is_local_main_process:
+                print('len(train_loader):', len(train_loader))
+                print('max train steps:', self.args.max_train_steps)
+            self.step = 0
+            self.global_step = 0
+
+            self.base_model, self.opt, train_loader, test_loader, self.scheduler, self.scheduler2, self.opt2 = self.accelerator.prepare(
+                self.base_model, self.opt, train_loader, test_loader, self.scheduler, self.scheduler2, self.opt2
+            )
+
+            self.train_loader = train_loader
+            self.test_loader = test_loader
+            self.eval_loaders = {}
+            self.eval_split_by_task = {}
+            if raw_eval_loaders:
+                if source_task in raw_eval_loaders:
+                    self.eval_loaders[source_task] = self.test_loader
+                    self.eval_split_by_task[source_task] = str(
+                        raw_eval_splits.get(
+                            source_task,
+                            getattr(dataset, "source_eval_split_name", getattr(dataset, "eval_split_name", "validation")),
+                        )
+                    )
+
+                extra_eval_items = [
+                    (task_name, loader)
+                    for task_name, loader in raw_eval_loaders.items()
+                    if task_name != source_task
+                ]
+                if extra_eval_items:
+                    prepared = self.accelerator.prepare(*[loader for _, loader in extra_eval_items])
+                    if len(extra_eval_items) == 1:
+                        prepared = (prepared,)
+                    for (task_name, _), prepared_loader in zip(extra_eval_items, prepared):
+                        self.eval_loaders[task_name] = prepared_loader
+                        self.eval_split_by_task[task_name] = str(raw_eval_splits.get(task_name, "ood"))
+            else:
+                eval_task_name = str(getattr(dataset, "eval_task_name", source_task))
+                self.eval_loaders[eval_task_name] = self.test_loader
+                self.eval_split_by_task[eval_task_name] = str(
+                    getattr(dataset, "eval_split_name", getattr(dataset, "source_eval_split_name", "validation"))
+                )
+
+            if bool(getattr(self.args, "bayes_datasetrescaling", False)):
+                self.M = int(
+                    100
+                    * (dataset.num_samples ** (math.pi / self.args.bayes_gamma))
+                    / (l_train / len(train_loader))
+                    / self.args.batch_size
+                )
+            else:
+                self.M = len(train_loader)
+
+            print("M:", self.M)
+            return
+
         self.wandb_logger = wandb_logger
         self.dataset_obj = dataset
         train_loader, test_loader = dataset.train_dataloader, dataset.test_dataloader
