@@ -611,7 +611,7 @@ def eval_adapter(
     model.eval()
     model.set_adapter(adapter_name)
     acc_m = _make_accuracy(device, num_classes)
-    ece_m = _make_ece(device, num_classes, 15)
+    ece_m = _make_ece(device, num_classes, 10)
     acc_m.reset()
     ece_m.reset()
 

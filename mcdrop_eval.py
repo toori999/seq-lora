@@ -210,7 +210,7 @@ def eval_mcdrop_one_dataset(model, loader, device, amp_dtype, mc_samples: int, t
     num_classes = lm_head.out_features
 
     acc_m = _make_accuracy(device, num_classes)
-    ece_m = _make_ece(device, num_classes, 15)
+    ece_m = _make_ece(device, num_classes, 10)
     acc_m.reset()
     ece_m.reset()
 

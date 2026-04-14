@@ -18,7 +18,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftConfig, PeftModel
 
 from kfac import calculate_kronecker_factors
-from lssm_ffbs_obs import kalman_filter
+from lssm_ffbs_obs import kalman_filter, lag_one_smoothed_covariances, rts_smoother
 from seq_lora_subspace_obs import (
     build_global_kronecker_eigenspace,
     materialize_mean_psd_from_factors,
@@ -47,7 +47,7 @@ SEED = 0
 TRUST_REMOTE_CODE = True
 
 MAX_SEQ_LEN = 300
-EVAL_BSZ = 32
+EVAL_BSZ = 48
 KFAC_BSZ = 8
 
 # KFAC / train-slice loaders remain conservative
@@ -59,18 +59,23 @@ EVAL_PREFETCH_FACTOR = 4
 
 N_KFAC = 16
 LR_THRESHOLD = 256
-MAX_KFAC_SAMPLES_PER_SLICE = 256
+MAX_KFAC_SAMPLES_PER_SLICE = 2048
 
 MU_OBS_SCALE = 2
-MU_OBS_BATCHES = 16
-Q_CONST_VAR = 1
+MU_OBS_BATCHES = 32
+S_Q = 1.0
+Q_MODE = "module_constant"
 P1_VAR = 1.0
 
 SUBSPACE_DIM_PER_MODULE = 64
-MC_EVAL_SAMPLES = 48
+MC_EVAL_SAMPLES = 32
+
+ADAPTIVE_Q_WARMSTART_VAR = 1.0
+ADAPTIVE_Q_EIG_FLOOR = 1e-8
 
 MIN_MEAN_TRACE_G = 1e-12
-PI_MAX = 1e6
+PI_MAX = 1e8
+HG_DIAG_SHRINKAGE = 1e-3
 
 POSTERIOR_TAU = 1.0
 TEMP_BAYES = 1.0
@@ -359,6 +364,139 @@ def materialize_scalar_Q_list(
     I = torch.eye(L, device=device, dtype=dtype)
     return [float(var) * I for var in var_list]
 
+
+def _adaptive_q_eps(dtype: torch.dtype) -> float:
+    return 1e-8 if dtype == torch.float64 else 1e-6
+
+
+def _symmetrize(M: Tensor) -> Tensor:
+    return 0.5 * (M + M.T)
+
+
+def _relative_floor_psd_eigs(evals: Tensor, eps_rel: float) -> Tensor:
+    evals = evals.clamp_min(0.0)
+    if eps_rel <= 0.0:
+        return evals
+    scale = torch.amax(evals)
+    return evals.clamp_min(scale * float(eps_rel))
+
+
+@torch.no_grad()
+def _build_module_q_basis(
+    H_x_list: List[Tensor],
+    *,
+    eps_rel: float,
+    dtype: torch.dtype,
+) -> Tuple[Tensor, Tensor]:
+    if len(H_x_list) == 0:
+        raise ValueError("H_x_list must be non-empty")
+    H_mean = torch.zeros_like(H_x_list[0], dtype=dtype)
+    for H_x in H_x_list:
+        H_mean.add_(H_x.to(dtype=dtype))
+    H_mean = _symmetrize(H_mean / float(len(H_x_list)))
+    nu_bar, U_q = torch.linalg.eigh(H_mean)
+    nu_bar = _relative_floor_psd_eigs(nu_bar, eps_rel)
+    return U_q.to(dtype=dtype), nu_bar.to(dtype=dtype)
+
+
+@torch.no_grad()
+def _estimate_module_q_diag(
+    x_smooth: List[Tensor],
+    P_smooth: List[Tensor],
+    lag_covariances: List[Tensor],
+    U_q: Tensor,
+    nu_bar: Tensor,
+    *,
+    eps: float,
+) -> Tuple[Tensor, Dict[str, float]]:
+    T = len(x_smooth)
+    L = x_smooth[0].numel()
+    dtype = x_smooth[0].dtype
+    device = x_smooth[0].device
+
+    nu_safe = nu_bar.to(device=device, dtype=dtype).clamp_min(float(eps))
+
+    if T <= 1:
+        q_prior = torch.ones(L, device=device, dtype=dtype)
+        return q_prior, {
+            "alpha_mix": 0.0,
+            "q_em_min": 1.0,
+            "q_em_mean": 1.0,
+            "q_em_max": 1.0,
+            "q_prior_min": 1.0,
+            "q_prior_mean": 1.0,
+            "q_prior_max": 1.0,
+            "q_diag_min": 1.0,
+            "q_diag_mean": 1.0,
+            "q_diag_max": 1.0,
+            "r_eff": float(L),
+        }
+
+    U_q_t = U_q.to(device=device, dtype=dtype)
+
+    mu_basis = [U_q_t.T @ x_t.to(device=device, dtype=dtype) for x_t in x_smooth]
+    diag_basis = []
+    cross_diag = [torch.zeros(L, device=device, dtype=dtype)]
+
+    for P_t in P_smooth:
+        P_basis = U_q_t.T @ P_t.to(device=device, dtype=dtype) @ U_q_t
+        diag_basis.append(torch.diagonal(_symmetrize(P_basis)))
+    for t in range(1, T):
+        C_basis = U_q_t.T @ lag_covariances[t].to(device=device, dtype=dtype) @ U_q_t
+        cross_diag.append(torch.diagonal(C_basis))
+
+    q_em_terms: List[Tensor] = []
+    for t in range(1, T):
+        delta_mu = mu_basis[t] - mu_basis[t - 1]
+        term_t = (
+            delta_mu.square()
+            + diag_basis[t]
+            + diag_basis[t - 1]
+            - 2.0 * cross_diag[t]
+        )
+        q_em_terms.append(term_t)
+
+    q_em = torch.stack(q_em_terms, dim=0).mean(dim=0).clamp_min(float(eps))
+    kappa = torch.median((nu_safe * q_em).clamp_min(float(eps)))
+    q_prior = (kappa / nu_safe).clamp_min(float(eps))
+
+    r_eff = (nu_safe.sum().square() / nu_safe.square().sum().clamp_min(float(eps))).clamp_min(1.0)
+    alpha_mix = float((T - 1) / ((T - 1) + float(r_eff.item())))
+    q_diag = (alpha_mix * q_em + (1.0 - alpha_mix) * q_prior).clamp_min(float(eps))
+
+    def _summ(x: Tensor, prefix: str) -> Dict[str, float]:
+        return {
+            f"{prefix}_min": float(x.min().item()),
+            f"{prefix}_mean": float(x.mean().item()),
+            f"{prefix}_max": float(x.max().item()),
+        }
+
+    stats: Dict[str, float] = {
+        "alpha_mix": float(alpha_mix),
+        "r_eff": float(r_eff.item()),
+    }
+    stats.update(_summ(q_em, "q_em"))
+    stats.update(_summ(q_prior, "q_prior"))
+    stats.update(_summ(q_diag, "q_diag"))
+    return q_diag, stats
+
+
+@torch.no_grad()
+def materialize_constant_module_Q_list(
+    U_q: Tensor,
+    q_diag: Tensor,
+    num_steps: int,
+    *,
+    s_q: float,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> List[Tensor]:
+    U_t = U_q.to(device=device, dtype=dtype)
+    q_t = q_diag.to(device=device, dtype=dtype)
+    base_Q = (U_t * (float(s_q) * q_t).unsqueeze(0)) @ U_t.T
+    base_Q = _symmetrize(base_Q)
+    return [base_Q.clone() for _ in range(num_steps)]
+
 def estimate_mu_global_list_from_slice_grads(
     model: nn.Module,
     slice_loaders: List[DataLoader],
@@ -413,58 +551,24 @@ def estimate_mu_global_list_from_slice_grads(
 
     return mu_global_list
 
-def balance_h_g_scales(
-    H_list: List[Tensor],
-    G_list: List[Tensor],
-    min_mean_trace_g: float = MIN_MEAN_TRACE_G,
-    pi_max: float = PI_MAX,
-) -> Tuple[List[Tensor], List[Tensor], float, Dict[str, float]]:
-    mean_trace_H = torch.stack([torch.trace(H_t) / H_list[0].shape[0] for H_t in H_list]).mean()
-    mean_trace_G = torch.stack([torch.trace(G_t) / G_list[0].shape[0] for G_t in G_list]).mean()
-    denom = (torch.tensor(min_mean_trace_g, dtype=mean_trace_G.dtype) if mean_trace_G < min_mean_trace_g else mean_trace_G + 1e-20)
-    pi = torch.sqrt(mean_trace_H / denom)
-    if pi > pi_max:
-        pi = torch.tensor(pi_max, dtype=pi.dtype)
-    H_bal = [H_t / pi for H_t in H_list]
-    G_bal = [G_t * pi for G_t in G_list]
-    stats = {
-        "mean_trace_H": float(mean_trace_H.item()),
-        "mean_trace_G": float(mean_trace_G.item()),
-        "pi": float(pi.item()),
-        "mean_trace_H_bal": float(torch.stack([torch.trace(H_t) / H_bal[0].shape[0] for H_t in H_bal]).mean().item()),
-        "mean_trace_G_bal": float(torch.stack([torch.trace(G_t) / G_bal[0].shape[0] for G_t in G_bal]).mean().item()),
-    }
-    return H_bal, G_bal, float(pi.item()), stats
-
-
-def balance_h_g_factor_scales(
+def summarize_h_g_factor_stats(
     H_factors: List[Tensor],
     G_factors: List[Tensor],
-    min_mean_trace_g: float = MIN_MEAN_TRACE_G,
-    pi_max: float = PI_MAX,
-) -> Tuple[float, Dict[str, float]]:
+) -> Dict[str, float]:
     mean_trace_H = torch.stack([
         trace_psd_factor(H_t) / H_factors[0].shape[0] for H_t in H_factors
     ]).mean()
     mean_trace_G = torch.stack([
         trace_psd_factor(G_t) / G_factors[0].shape[0] for G_t in G_factors
     ]).mean()
-    denom = (
-        torch.tensor(min_mean_trace_g, dtype=mean_trace_G.dtype)
-        if mean_trace_G < min_mean_trace_g
-        else mean_trace_G + 1e-20
-    )
-    pi = torch.sqrt(mean_trace_H / denom)
-    if pi > pi_max:
-        pi = torch.tensor(pi_max, dtype=pi.dtype)
     stats = {
         "mean_trace_H": float(mean_trace_H.item()),
         "mean_trace_G": float(mean_trace_G.item()),
-        "pi": float(pi.item()),
-        "mean_trace_H_bal": float((mean_trace_H / pi).item()),
-        "mean_trace_G_bal": float((mean_trace_G * pi).item()),
+        "pi": 1.0,
+        "mean_trace_H_bal": float(mean_trace_H.item()),
+        "mean_trace_G_bal": float(mean_trace_G.item()),
     }
-    return float(pi.item()), stats
+    return stats
 
 
 def _move_subspace_info(
@@ -488,11 +592,21 @@ def _report_h_g_pi_results(module_stats: Dict[str, Dict[str, float]]) -> None:
         print("[H/G/pi] No module statistics available.")
         return
 
+    def _fmt_value(key: str, value: float) -> str:
+        if key in {"mean_trace_G", "mean_trace_G_bal", "robust_scale_G"}:
+            return f"{value:.6e}"
+        return f"{value:.6f}"
+
     def _summ(key: str) -> str:
         vals = [float(stats[key]) for stats in module_stats.values()]
-        return f"min={min(vals):.6f} mean={sum(vals)/len(vals):.6f} max={max(vals):.6f}"
+        return (
+            f"min={_fmt_value(key, min(vals))} "
+            f"mean={_fmt_value(key, sum(vals)/len(vals))} "
+            f"max={_fmt_value(key, max(vals))}"
+        )
 
     print("\n=== H/G/pi Report ===")
+    print("[H/G/pi] Relative eig floors are enabled, so pi is fixed to 1.0.")
     print(
         f"[H/G/pi Summary] "
         f"H({_summ('mean_trace_H')}) | "
@@ -504,11 +618,43 @@ def _report_h_g_pi_results(module_stats: Dict[str, Dict[str, float]]) -> None:
         print(
             f"  {name}: "
             f"H={stats['mean_trace_H']:.6f} "
-            f"G={stats['mean_trace_G']:.6f} "
+            f"G={stats['mean_trace_G']:.6e} "
             f"pi={stats['pi']:.6f} "
             f"H_bal={stats['mean_trace_H_bal']:.6f} "
-            f"G_bal={stats['mean_trace_G_bal']:.6f}"
+            f"G_bal={stats['mean_trace_G_bal']:.6e}"
         )
+
+
+def _report_module_constant_q_results(module_stats: Dict[str, Dict[str, float]], s_q: float) -> None:
+    if not module_stats:
+        print("[Module Q] No module statistics available.")
+        return
+
+    def _summ(key: str) -> str:
+        vals = [float(stats[key]) for stats in module_stats.values()]
+        return f"min={min(vals):.6f} mean={sum(vals)/len(vals):.6f} max={max(vals):.6f}"
+
+    print("\n=== Module-Constant Q Report ===")
+    print(f"[Module Q] exposed scale s_Q={float(s_q):.6f}")
+    print(
+        f"[Module Q Summary] "
+        f"alpha({_summ('alpha_mix')}) | "
+        f"qdiag({_summ('q_diag_mean')})"
+    )
+    print("[Module Q Per Module]")
+    for name, stats in module_stats.items():
+        print(
+            f"  {name}: "
+            f"alpha={stats['alpha_mix']:.6f} "
+            f"r_eff={stats['r_eff']:.3f} "
+            f"nu=[{stats['nu_min']:.6f}, {stats['nu_mean']:.6f}, {stats['nu_max']:.6f}] "
+            f"qdiag=[{stats['q_diag_min']:.6f}, {stats['q_diag_mean']:.6f}, {stats['q_diag_max']:.6f}]"
+        )
+
+
+def _report_scalar_constant_q_results(s_q: float) -> None:
+    print("\n=== Scalar-Constant Q Report ===")
+    print(f"[Constant Q] mode=constant  shared Q_t = s_Q * I with s_Q={float(s_q):.6f}")
 
 # =========================
 # Fast Bayesian eval
@@ -660,7 +806,7 @@ def eval_bayes_fast_restricted_4way_probmean(
 
     acc_bay_m = _make_accuracy(device, num_classes=num_classes)
     acc_bay_m.reset()
-    ece_bay_m = _make_ece(device, num_classes=num_classes, n_bins=15)
+    ece_bay_m = _make_ece(device, num_classes=num_classes, n_bins=10)
     ece_bay_m.reset()
 
     acc_bay_m.update(probs_bayes_global, labels_global)
@@ -682,7 +828,7 @@ def eval_bayes_fast_restricted_4way_probmean(
 # =========================
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate Bayesian Seq-LoRA on various tasks with constant process noise Q.")
+    parser = argparse.ArgumentParser(description="Evaluate Bayesian Seq-LoRA on various tasks with selectable process-noise Q modes.")
     parser.add_argument("--seed", type=int, default=SEED, help="Random seed.")
     parser.add_argument(
         "--trust_remote_code",
@@ -741,10 +887,24 @@ def main():
         help="Comma-separated eval tasks. Supports iid, arc, arc-c, arc-e, sciq, hellaswag, gpqa, gpqa_main, agieval, mmlu, mmlu_science_high, mmlu_science_college, scienceqa_closedchoice_grade12.",
     )
     parser.add_argument(
-        "--constant_q_var",
+        "--s_q",
         type=float,
-        default=float(Q_CONST_VAR),
-        help="Constant process-noise variance used for all slices: Q_t = q_var * I.",
+        default=float(S_Q),
+        help="Global process-noise scale. In module_constant mode it scales the learned per-module Q_m; in constant mode it sets Q_t = s_Q * I.",
+    )
+    parser.add_argument(
+        "--q_mode",
+        type=str,
+        choices=["module_constant", "constant"],
+        default=Q_MODE,
+        help="Process-noise mode: learned per-module constant Q_m, or a shared scalar constant Q_t = s_Q * I.",
+    )
+    parser.add_argument(
+        "--constant_q_var",
+        dest="s_q",
+        type=float,
+        default=argparse.SUPPRESS,
+        help=argparse.SUPPRESS,
     )
     parser.add_argument("--p1_var", type=float, default=P1_VAR, help="Initial state covariance scale P1.")
     parser.add_argument(
@@ -764,9 +924,20 @@ def main():
         "--min_mean_trace_g",
         type=float,
         default=MIN_MEAN_TRACE_G,
-        help="Numerical floor used when balancing H/G traces.",
+        help="Deprecated no-op retained for CLI compatibility after removing explicit H/G pi balancing.",
     )
-    parser.add_argument("--pi_max", type=float, default=PI_MAX, help="Maximum trace-balancing scale factor.")
+    parser.add_argument(
+        "--pi_max",
+        type=float,
+        default=PI_MAX,
+        help="Deprecated no-op retained for CLI compatibility after removing explicit H/G pi balancing.",
+    )
+    parser.add_argument(
+        "--hg_diag_shrinkage",
+        type=float,
+        default=HG_DIAG_SHRINKAGE,
+        help="Deprecated no-op retained for CLI compatibility after removing explicit H/G pi balancing.",
+    )
     parser.add_argument("--posterior_tau", type=float, default=POSTERIOR_TAU, help="Posterior scale multiplier used at evaluation.")
     parser.add_argument("--temp_bayes", type=float, default=TEMP_BAYES, help="Temperature applied to Bayesian mean probabilities.")
     parser.add_argument(
@@ -779,7 +950,7 @@ def main():
     parser.add_argument(
         "--forecast_horizon",
         type=int,
-        default=1,
+        default=0,
         help="Forecast horizon h. 0 uses x_{T|T}; 1 uses one-step-ahead x_{T+1|T}.",
     )
     args = parser.parse_args()
@@ -991,28 +1162,23 @@ def main():
                 torch.cuda.empty_cache()
                 torch.cuda.ipc_collect()
 
-        module_subspace_info, module_R_lists = {}, {}
+        module_subspace_info, module_R_lists, module_Hx_lists = {}, {}, {}
         module_hgpi_stats: Dict[str, Dict[str, float]] = {}
         for name in module_names:
             H_factors = H_factor_per_module[name]
             G_factors = G_factor_per_module[name]
-            pi, hgpi_stats = balance_h_g_factor_scales(
-                H_factors,
-                G_factors,
-                min_mean_trace_g=float(args.min_mean_trace_g),
-                pi_max=float(args.pi_max),
-            )
+            hgpi_stats = summarize_h_g_factor_stats(H_factors, G_factors)
             module_hgpi_stats[name] = hgpi_stats
 
             H_bar_bal = materialize_mean_psd_from_factors(
                 H_factors,
-                matrix_scale=(1.0 / pi),
+                matrix_scale=1.0,
                 device=device,
                 dtype=torch.float64,
             )
             G_bar_bal = materialize_mean_psd_from_factors(
                 G_factors,
-                matrix_scale=pi,
+                matrix_scale=1.0,
                 device=device,
                 dtype=torch.float64,
             )
@@ -1023,13 +1189,13 @@ def main():
                 subspace_dim=args.subspace_dim_per_module,
                 eps_eig=1e-6,
             )
-            _, R_list = project_curvature_factors_to_subspace(
+            H_x_list, R_list = project_curvature_factors_to_subspace(
                 H_factors=H_factors,
                 G_B_factors=G_factors,
                 subspace_info=subspace_info_gpu,
                 lambda_damp=1e-4,
-                H_matrix_scale=(1.0 / pi),
-                G_matrix_scale=pi,
+                H_matrix_scale=1.0,
+                G_matrix_scale=1.0,
                 work_device=device,
                 out_device=cpu_device,
                 dtype=torch.float64,
@@ -1039,6 +1205,7 @@ def main():
                 device=cpu_device,
                 dtype=torch.float64,
             )
+            module_Hx_lists[name] = H_x_list
             module_R_lists[name] = R_list
 
             H_factors.clear()
@@ -1078,8 +1245,6 @@ def main():
         )
         mu_global_list = [float(args.mu_obs_scale) * mu_t for mu_t in mu_global_list]
 
-        q_var_list = [float(args.constant_q_var) for _ in range(T)]
-
         print(f"\n=== Kalman Filter Only (module-wise) ===")
         print(f"[Kalman] modules={len(module_specs)} L_total={L_total}")
 
@@ -1092,6 +1257,8 @@ def main():
             print(f"\nDirectly sampling final posterior (t=T): S={args.mc_eval_samples}")
 
         x_sample_parts: List[Tensor] = []
+        module_constant_q_stats: Dict[str, Dict[str, float]] = {}
+        use_module_constant_q = args.q_mode == "module_constant"
         for spec in module_specs:
             name = spec["name"]
             offset = int(spec["offset"])
@@ -1100,18 +1267,71 @@ def main():
                 mu_t[offset : offset + Lm].to(device=cpu_device, dtype=torch.float64)
                 for mu_t in mu_global_list
             ]
+            H_x_list = module_Hx_lists[name]
             H_obs_list, y_list = prepare_lgssm_observations(
                 module_R_lists[name],
                 mu_list=mu_module_list,
             )
             m1 = torch.zeros(Lm, device=cpu_device, dtype=torch.float64)
             P1 = float(args.p1_var) * torch.eye(Lm, device=cpu_device, dtype=torch.float64)
-            Q_list = materialize_scalar_Q_list(
-                q_var_list,
-                L=Lm,
-                device=cpu_device,
-                dtype=torch.float64,
-            )
+
+            if use_module_constant_q:
+                U_q, nu_bar = _build_module_q_basis(
+                    H_x_list,
+                    eps_rel=ADAPTIVE_Q_EIG_FLOOR,
+                    dtype=torch.float64,
+                )
+
+                warm_Q_list = materialize_scalar_Q_list(
+                    [ADAPTIVE_Q_WARMSTART_VAR for _ in range(T)],
+                    L=Lm,
+                    device=cpu_device,
+                    dtype=torch.float64,
+                )
+                x_filt_w, P_filt_w, x_pred_w, P_pred_w = kalman_filter(
+                    H_list=H_obs_list,
+                    y_list=y_list,
+                    Q_list=warm_Q_list,
+                    m1=m1,
+                    P1=P1,
+                )
+                x_smooth_w, P_smooth_w, J_w = rts_smoother(
+                    x_filt_w,
+                    P_filt_w,
+                    x_pred_w,
+                    P_pred_w,
+                    warm_Q_list,
+                )
+                lag_cov_w = lag_one_smoothed_covariances(P_smooth_w, J_w)
+                q_diag, q_stats = _estimate_module_q_diag(
+                    x_smooth_w,
+                    P_smooth_w,
+                    lag_cov_w,
+                    U_q,
+                    nu_bar,
+                    eps=_adaptive_q_eps(torch.float64),
+                )
+                Q_list = materialize_constant_module_Q_list(
+                    U_q,
+                    q_diag,
+                    num_steps=T,
+                    s_q=float(args.s_q),
+                    device=cpu_device,
+                    dtype=torch.float64,
+                )
+                module_constant_q_stats[name] = {
+                    **q_stats,
+                    "nu_min": float(nu_bar.min().item()),
+                    "nu_mean": float(nu_bar.mean().item()),
+                    "nu_max": float(nu_bar.max().item()),
+                }
+            else:
+                Q_list = materialize_scalar_Q_list(
+                    [float(args.s_q) for _ in range(T)],
+                    L=Lm,
+                    device=cpu_device,
+                    dtype=torch.float64,
+                )
 
             x_filt_m, P_filt_m, _, _ = kalman_filter(
                 H_list=H_obs_list,
@@ -1138,9 +1358,36 @@ def main():
             )
             x_sample_parts.append(dist_m.sample((int(args.mc_eval_samples),)))
 
-            del H_obs_list, y_list, Q_list, x_filt_m, P_filt_m, mu_T_m, cov_T_m, cov_T_stable, dist_m
+            del (
+                H_obs_list,
+                y_list,
+                Q_list,
+                x_filt_m,
+                P_filt_m,
+                mu_T_m,
+                cov_T_m,
+                cov_T_stable,
+                dist_m,
+            )
+            if use_module_constant_q:
+                del (
+                    warm_Q_list,
+                    x_filt_w,
+                    P_filt_w,
+                    x_pred_w,
+                    P_pred_w,
+                    x_smooth_w,
+                    P_smooth_w,
+                    J_w,
+                    lag_cov_w,
+                    q_diag,
+                )
             gc.collect()
 
+        if use_module_constant_q:
+            _report_module_constant_q_results(module_constant_q_stats, args.s_q)
+        else:
+            _report_scalar_constant_q_results(args.s_q)
         del mu_global_list
         x_samples_T = torch.cat(x_sample_parts, dim=1).to(
             device=device,

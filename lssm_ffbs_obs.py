@@ -196,6 +196,38 @@ def rts_smoother(
     return x_smooth, P_smooth, J_list
 
 
+def lag_one_smoothed_covariances(
+    P_smooth: List[Tensor],
+    J_list: List[Tensor],
+) -> List[Tensor]:
+    """
+    Return lag-one smoothed covariances P_{t,t-1|T}.
+
+    For the random-walk model used here, the conditional mean of x_{t-1}
+    given x_t and observations has affine gain J_{t-1}, so
+
+        P_{t-1,t|T} = J_{t-1} P_{t|T}
+        P_{t,t-1|T} = P_{t|T} J_{t-1}^T
+
+    We return a length-T list aligned with the time index; entry 0 is a zero
+    placeholder because there is no lag-one covariance for t=0.
+    """
+    if len(P_smooth) == 0:
+        raise ValueError("P_smooth must be non-empty")
+    if len(J_list) != max(len(P_smooth) - 1, 0):
+        raise ValueError(
+            f"Expected len(J_list)={max(len(P_smooth) - 1, 0)}, got {len(J_list)}"
+        )
+
+    L = P_smooth[0].shape[0]
+    device = P_smooth[0].device
+    dtype = P_smooth[0].dtype
+    out: List[Tensor] = [torch.zeros((L, L), device=device, dtype=dtype)]
+    for t in range(1, len(P_smooth)):
+        out.append(P_smooth[t] @ J_list[t - 1].T)
+    return out
+
+
 def ffbs_sample(
     x_filt: List[Tensor],
     P_filt: List[Tensor],
@@ -290,4 +322,3 @@ def ffbs_sample(
             x_next = x_t
 
     return samples
-

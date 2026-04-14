@@ -67,6 +67,15 @@ def solve_xhat_from_grad(R: Tensor, g_x: Tensor) -> Tensor:
     return mu.squeeze(-1)
 
 
+def _relative_eig_floor(evals: Tensor, eps_rel: float) -> Tensor:
+    """Floor eigenvalues relative to the matrix scale to preserve H/G gauge invariance."""
+    evals = evals.clamp_min(0.0)
+    if eps_rel <= 0.0:
+        return evals
+    scale = torch.amax(evals)
+    return evals.clamp_min(scale * float(eps_rel))
+
+
 # -------------------------------------------------------------------------
 # 1) Build global Kronecker eigenspace
 # -------------------------------------------------------------------------
@@ -89,7 +98,8 @@ def build_global_kronecker_eigenspace(
     subspace_dim: int
         Target subspace dimension L (selecting top-L Kronecker eigen directions).
     eps_eig: float
-        Lower bound for eigenvalue clamping to ensure numerical stability.
+        Relative eigenvalue floor. Each spectrum is clamped to
+        eps_eig * max(spectrum) after removing tiny negative numerical noise.
 
     Returns
     -------
@@ -121,9 +131,10 @@ def build_global_kronecker_eigenspace(
     alpha, U_H = torch.linalg.eigh(H_bar)   # α ∈ R^{k}
     beta, U_G = torch.linalg.eigh(G_B_bar)  # β ∈ R^{r}
 
-    # Clamp negative eigenvalues caused by numerical instability
-    alpha = torch.clamp(alpha, min=eps_eig)
-    beta = torch.clamp(beta, min=eps_eig)
+    # Remove tiny negative numerical noise, then apply a relative floor so the
+    # top-K Kronecker ranking stays invariant to H/G rescaling.
+    alpha = _relative_eig_floor(alpha, eps_eig)
+    beta = _relative_eig_floor(beta, eps_eig)
 
     # Kronecker eigenvalues λ_{ij} = α_i β_j
     lam_2d = alpha.unsqueeze(1) * beta.unsqueeze(0)  # (k, r)

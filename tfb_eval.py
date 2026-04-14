@@ -382,7 +382,7 @@ def evaluate_tfb_official_style(
     model.eval()
     model.set_adapter("default")
     acc_metric = make_accuracy(device, num_classes)
-    ece_metric = make_ece(device, num_classes, 15)
+    ece_metric = make_ece(device, num_classes, 10)
     acc_metric.reset()
     ece_metric.reset()
 

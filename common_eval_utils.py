@@ -1085,7 +1085,7 @@ def make_accuracy(device: torch.device, num_classes: int):
 
 
 
-def make_ece(device: torch.device, num_classes: int, n_bins: int = 15):
+def make_ece(device: torch.device, num_classes: int, n_bins: int = 10):
     if CalibrationError is not None:
         try:
             return CalibrationError(task="multiclass", num_classes=num_classes, n_bins=n_bins, norm="l1").to(device)

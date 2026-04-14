@@ -40,4 +40,8 @@ do
       --bayes-train-n-samples $sample --bayes-eval-n-samples $sample --bayes-eval-n-samples-final $sample --th $th --iter $iter
     done
   done
+<<<<<<< ours
 done
+=======
+done
+>>>>>>> theirs

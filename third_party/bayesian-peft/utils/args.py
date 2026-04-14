@@ -91,7 +91,13 @@ def add_experiment_args(parser: ArgumentParser) -> None:
     parser.add_argument(
         "--batch-size", 
         type=int, 
-        help="Batch size for training and evaluation."
+        help="Batch size for training."
+    )
+    parser.add_argument(
+        "--eval-batch-size",
+        type=int,
+        default=48,
+        help="Batch size for evaluation and anchor loaders. Default is 48."
     )
     parser.add_argument(
         "--lr", 
@@ -152,8 +158,8 @@ def add_experiment_args(parser: ArgumentParser) -> None:
     parser.add_argument(
         "--num-bins", 
         type=int, 
-        default=15, 
-        help="Number of bins to use for Expected Calibration Error (ECE) computation. Default is 15."
+        default=10, 
+        help="Number of bins to use for Expected Calibration Error (ECE) computation. Default is 10."
     )
     parser.add_argument(
         "--load-model-path", 
@@ -166,6 +172,24 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         type=str, 
         default=None, 
         help="Path to a pre-trained LoRA checkpoint to load."
+    )
+    parser.add_argument(
+        "--shared-init-lora-path",
+        type=str,
+        default=None,
+        help="Path to a normalized shared LoRA init state dict (e.g. init_lora.pt) to load before training.",
+    )
+    parser.add_argument(
+        "--save-blob-dir",
+        type=str,
+        default=None,
+        help="BLoB-only: save the trained adapter plus blob_rho.pt to this directory after training.",
+    )
+    parser.add_argument(
+        "--load-blob-dir",
+        type=str,
+        default=None,
+        help="BLoB-only: load a previously saved adapter plus blob_rho.pt from this directory.",
     )
     parser.add_argument("--load-lora-huggingface-repo", type=str, default=None)
     parser.add_argument(
@@ -191,7 +215,9 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         type=str,
         default=None,
         help="Optional evaluation dataset for benchmark_mcdataset. "
-             "Use 'iid' or leave unset to evaluate the source dataset split selected by --testing-set.",
+             "Use 'iid' or leave unset to evaluate the source dataset split selected by --testing-set. "
+             "For train-once multi-eval runs, pass a comma-separated list such as "
+             "'iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main'.",
     )
     parser.add_argument(
         "--anchor-size", type=int, default=500, help="size of anchor set"

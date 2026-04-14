@@ -633,7 +633,7 @@ def eval_adapter(
 ) -> Dict[str, float]:
     model.eval()
     model.set_adapter(adapter_name)
-    acc_m, ece_m = _make_accuracy(device, num_classes), _make_ece(device, num_classes, 15)
+    acc_m, ece_m = _make_accuracy(device, num_classes), _make_ece(device, num_classes, 10)
     acc_m.reset(); ece_m.reset()
     total, nll_sum = 0, 0.0
     all_probs: List[torch.Tensor] = []

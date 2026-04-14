@@ -513,7 +513,7 @@ def eval_map_source_style(
     num_classes: int,
 ) -> Dict[str, float]:
     acc_m = _make_accuracy(device, num_classes)
-    ece_m = _make_ece(device, num_classes, 15)
+    ece_m = _make_ece(device, num_classes, 10)
     acc_m.reset()
     ece_m.reset()
     total = 0
@@ -553,7 +553,7 @@ def eval_laplace_source_mc_corr(
     progress_desc: str,
 ) -> Dict[str, float]:
     acc_m = _make_accuracy(device, num_classes)
-    ece_m = _make_ece(device, num_classes, 15)
+    ece_m = _make_ece(device, num_classes, 10)
     acc_m.reset()
     ece_m.reset()
 

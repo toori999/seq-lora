@@ -79,7 +79,7 @@ def _metrics_from_probs(
 ) -> Dict[str, float]:
     device = torch.device("cpu")
     acc_m = _make_accuracy(device, num_classes)
-    ece_m = _make_ece(device, num_classes, 15)
+    ece_m = _make_ece(device, num_classes, 10)
     acc_m.reset()
     ece_m.reset()
     acc_m.update(probs, labels)

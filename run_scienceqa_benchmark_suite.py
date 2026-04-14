@@ -82,6 +82,21 @@ TFB_METRICS_RE = re.compile(
     r"Brier=(?P<brier>[0-9.]+)\s+mc=(?P<mc>[0-9.]+)\s+beta=(?P<beta>[0-9.]+)"
 )
 TFB_SAVE_RE = re.compile(r"^\[Save\] TFB fit info -> (?P<path>.+)$")
+TFB_LOG_SPECS: Tuple[Tuple[re.Pattern[str], str, bool], ...] = (
+    (re.compile(r"^tfb_order_seed(?P<seed>\d+)$"), "tfb_order", False),
+    (re.compile(r"^official_tfblora_fit_seed(?P<seed>\d+)$"), "official_tfblora_order", True),
+    (re.compile(r"^official_tfblora_seed(?P<seed>\d+)_(?P<eval_task>.+)$"), "official_tfblora_order", False),
+    (
+        re.compile(r"^official_tfblora_bench_lora_seed(?P<seed>\d+)_(?P<eval_task>.+)$"),
+        "official_tfblora_bench_lora_order",
+        False,
+    ),
+    (
+        re.compile(r"^official_tfblora_src_hparam_seed(?P<seed>\d+)_(?P<eval_task>.+)$"),
+        "official_tfblora_src_hparam_order",
+        False,
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -592,6 +607,7 @@ def parse_tfb_output(
     seed: int,
     source_order: str,
     wall_time_sec: float,
+    method: str = "tfb_order",
 ) -> Tuple[List[Dict[str, object]], Optional[float]]:
     del source_order
     stage_times = parse_stage_times(text)
@@ -617,7 +633,7 @@ def parse_tfb_output(
         infer_peak_alloc_gb, infer_peak_reserved_gb = _get_stage_peak(stage_peaks, infer_tag)
         rows.append(
             make_result_row(
-                method="tfb_order",
+                method=method,
                 seed=seed,
                 source_order="order",
                 eval_task=eval_task,
@@ -640,18 +656,32 @@ def parse_tfb_output(
     return rows, train_time_sec
 
 
+def _classify_tfb_log(log_stem: str) -> Optional[Tuple[int, str, bool]]:
+    for pattern, method, fit_only in TFB_LOG_SPECS:
+        m = pattern.match(log_stem)
+        if m:
+            return int(m.group("seed")), method, fit_only
+    return None
+
+
 def build_tfb_payload_from_log(log_path: Path) -> Optional[Dict[str, object]]:
-    m = re.match(r"^tfb_order_seed(?P<seed>\d+)$", log_path.stem)
-    if not m:
+    classified = _classify_tfb_log(log_path.stem)
+    if not classified:
         return None
 
-    seed = int(m.group("seed"))
+    seed, method, fit_only = classified
     text = log_path.read_text(encoding="utf-8", errors="replace")
     stage_times = parse_stage_times(text)
     stage_peaks = parse_stage_peaks(text)
     wall_time_sec = float(sum(stage_times.values())) if stage_times else 0.0
-    results, train_time_sec = parse_tfb_output(text, seed=seed, source_order="order", wall_time_sec=wall_time_sec)
-    if not results:
+    results, train_time_sec = parse_tfb_output(
+        text,
+        seed=seed,
+        source_order="order",
+        wall_time_sec=wall_time_sec,
+        method=method,
+    )
+    if not results and not fit_only:
         return None
 
     fit_tag = next((tag for tag in stage_times if tag.startswith("FIT TFB on ")), None)
@@ -686,7 +716,7 @@ def build_tfb_payload_from_log(log_path: Path) -> Optional[Dict[str, object]]:
         "train_time_sec": train_time_sec,
         "train_peak_alloc_gb": train_peak_alloc_gb,
         "train_peak_reserved_gb": train_peak_reserved_gb,
-        "results": results,
+        "results": ([] if fit_only else results),
     }
 
 
@@ -921,6 +951,8 @@ def _infer_stage_tag_from_row(command_name: str, row: Dict[str, object]) -> Opti
         return f"EVAL blob_sample(N={mc_samples}) on {eval_task}"
     if method == "tfb_order":
         return f"INFER TFB on {eval_task}({split})"
+    if method in {"official_tfblora_order", "official_tfblora_bench_lora_order", "official_tfblora_src_hparam_order"}:
+        return f"INFER TFB on {eval_task}({split})"
     return None
 
 
@@ -963,7 +995,7 @@ def collect_status_rows(status_dir: Path) -> Tuple[List[Dict[str, object]], List
 
     existing_command_names = {str(row.get("name", "")) for row in command_rows}
     logs_dir = status_dir.parent / "logs"
-    for log_path in sorted(logs_dir.glob("tfb_order_seed*.log")):
+    for log_path in sorted(logs_dir.glob("*.log")):
         if log_path.stem in existing_command_names:
             continue
         payload = build_tfb_payload_from_log(log_path)
@@ -979,26 +1011,30 @@ def collect_status_rows(status_dir: Path) -> Tuple[List[Dict[str, object]], List
                 metrics_rows.append(_augment_result_row_with_infer_peaks(str(payload.get("name", "")), row, stage_peaks))
 
     map_train_by_key: Dict[Tuple[str, int], Dict[str, object]] = {}
+    official_tfb_fit_by_seed: Dict[int, Dict[str, object]] = {}
     for payload in command_rows:
         name = str(payload.get("name", ""))
         m = re.match(r"^train_map_(order|reverse|random)_seed(?P<seed>\d+)$", name)
-        if not m:
-            continue
-        order_key = m.group(1)
-        seed = int(m.group("seed"))
-        map_train_by_key[(order_key, seed)] = payload
+        if m:
+            order_key = m.group(1)
+            seed = int(m.group("seed"))
+            map_train_by_key[(order_key, seed)] = payload
+        m_tfb_fit = re.match(r"^official_tfblora_fit_seed(?P<seed>\d+)$", name)
+        if m_tfb_fit:
+            official_tfb_fit_by_seed[int(m_tfb_fit.group("seed"))] = payload
 
     for row in metrics_rows:
         method = str(row.get("method", ""))
-        if method not in {"map_order", "map_reverse", "map_random"}:
-            continue
-        order_key = method.replace("map_", "", 1)
         seed = int(row.get("seed"))
-        payload = map_train_by_key.get((order_key, seed))
-        if not payload:
-            continue
-        if row.get("train_time_sec") in (None, ""):
-            row["train_time_sec"] = payload.get("train_time_sec")
+        if method in {"map_order", "map_reverse", "map_random"}:
+            order_key = method.replace("map_", "", 1)
+            payload = map_train_by_key.get((order_key, seed))
+            if payload and row.get("train_time_sec") in (None, ""):
+                row["train_time_sec"] = payload.get("train_time_sec")
+        if method == "official_tfblora_order":
+            payload = official_tfb_fit_by_seed.get(seed)
+            if payload and row.get("train_time_sec") in (None, ""):
+                row["train_time_sec"] = payload.get("train_time_sec")
     return metrics_rows, command_rows
 
 
@@ -1209,7 +1245,8 @@ def build_seq_command(
     map_dir: Path,
     slice_dir: Path,
     eval_tasks: Sequence[str],
-    constant_q_var: float,
+    s_q: float,
+    q_mode: str,
     seq_mc_eval_chunk: int = 0,
 ) -> List[str]:
     cmd = [
@@ -1223,8 +1260,10 @@ def build_seq_command(
         str(map_dir),
         "--eval_tasks",
         ",".join(eval_tasks),
-        "--constant_q_var",
-        str(constant_q_var),
+        "--s_q",
+        str(s_q),
+        "--q_mode",
+        str(q_mode),
         "--forecast_horizon",
         "0",
     ]
@@ -1342,7 +1381,9 @@ def main() -> None:
     parser.add_argument("--map_micro_bsz", type=int, default=4)
     parser.add_argument("--map_grad_accum", type=int, default=2)
     parser.add_argument("--map_eval_bsz", type=int, default=32)
-    parser.add_argument("--constant_q_var", type=float, default=1.0)
+    parser.add_argument("--s_q", type=float, default=1.0)
+    parser.add_argument("--q_mode", type=str, choices=["module_constant", "constant"], default="module_constant")
+    parser.add_argument("--constant_q_var", dest="s_q", type=float, default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     parser.add_argument("--seq_mc_eval_chunk", type=int, default=0)
     parser.add_argument("--blob_eval_n", type=int, default=10)
     parser.add_argument("--mcdrop_mc_samples", type=int, default=32)
@@ -1377,7 +1418,8 @@ def main() -> None:
             "map_micro_bsz": int(args.map_micro_bsz),
             "map_grad_accum": int(args.map_grad_accum),
             "map_eval_bsz": int(args.map_eval_bsz),
-            "constant_q_var": float(args.constant_q_var),
+            "s_q": float(args.s_q),
+            "q_mode": str(args.q_mode),
             "seq_mc_eval_chunk": int(args.seq_mc_eval_chunk),
             "blob_eval_n": int(args.blob_eval_n),
             "mcdrop_mc_samples": int(args.mcdrop_mc_samples),
@@ -1478,7 +1520,8 @@ def main() -> None:
                 map_dir=map_dir,
                 slice_dir=order_cfg.slice_dir,
                 eval_tasks=eval_tasks,
-                constant_q_var=float(args.constant_q_var),
+                s_q=float(args.s_q),
+                q_mode=str(args.q_mode),
                 seq_mc_eval_chunk=int(args.seq_mc_eval_chunk),
             ),
             parser_fn=parse_seq_output,

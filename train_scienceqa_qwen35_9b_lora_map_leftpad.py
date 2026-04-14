@@ -503,7 +503,7 @@ def eval_next_token(
     return {
         "nll": total_nll / max(total, 1),
         "acc": total_correct / max(total, 1),
-        "ece": compute_ece(probs_all, labels_all, n_bins=15),
+        "ece": compute_ece(probs_all, labels_all, n_bins=10),
     }
 
 

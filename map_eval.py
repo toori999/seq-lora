@@ -227,7 +227,7 @@ def eval_map_one_dataset(model, loader, device, amp_dtype):
     num_classes = lm_head.out_features
     ce_sum = nn.CrossEntropyLoss(reduction="sum")
     acc_m = _make_accuracy(device, num_classes)
-    ece_m = _make_ece(device, num_classes, 15)
+    ece_m = _make_ece(device, num_classes, 10)
     acc_m.reset()
     ece_m.reset()
 
