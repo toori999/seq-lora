@@ -253,9 +253,14 @@ class BenchmarkMCDataset(DatasetBase):
         self.num_samples = len(train_proc)
         sort_train_by_len = self.source_task != getattr(ceu, "SCIENCEQA_CURRIC_TASK_NAME", "scienceqa_closedchoice_grade2_11")
         eval_batch_size = int(getattr(self.args, "eval_batch_size", 48))
+        # Some evaluation-only flows (e.g. TFBLoRA loaded from a saved MAP adapter)
+        # never consume the train loader, but this dataset still builds one up front.
+        # Fall back to the eval batch size so the loader remains valid when
+        # --batch-size is omitted.
+        train_batch_size = int(getattr(self.args, "batch_size", 0) or eval_batch_size)
         self.train_dataloader = self._loader(
             train_proc,
-            self.args.batch_size,
+            train_batch_size,
             drop_last=True,
             sort_by_len=sort_train_by_len,
         )
@@ -297,5 +302,5 @@ class BenchmarkMCDataset(DatasetBase):
             f"anchor={len(anchor_proc)}({anchor_split_name}) "
             f"source_eval={len(source_test_proc)}({self.source_task}:{source_eval_split_name}) "
             f"eval_tasks={eval_tasks} "
-            f"train_bsz={int(self.args.batch_size)} eval_bsz={eval_batch_size}"
+            f"train_bsz={train_batch_size} eval_bsz={eval_batch_size}"
         )

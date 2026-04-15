@@ -1,10 +1,13 @@
+import os
+import sys
 import torch
 import torch.nn as nn
 import numpy as np
 import math
 from tqdm import tqdm
 from dataclasses import dataclass, field
-from .wrapperbase import WrapperBase
+from typing import Dict, List
+from .wrapperbase import WrapperBase, _get_torchmetrics
 from utils.args import add_management_args, add_experiment_args, ArgumentParser
 from run.evaluation import *
 
@@ -19,6 +22,7 @@ from .blob import blob_linear_forward, sample, blob_8bitlinear_forward, BLoBConf
 import logging
 import json
 import time
+import re
 from pathlib import Path
 
 from utils import StageTimer
@@ -58,6 +62,39 @@ def _is_mc_dataset_type(dataset_type: str) -> bool:
 
 def _uses_trimmed_mc_head(dataset_type: str) -> bool:
     return str(dataset_type).strip().lower() == "benchmark_mcdataset"
+
+
+def _load_seq_lora_helpers():
+    try:
+        import common_eval_utils as ceu  # type: ignore
+
+        return ceu
+    except Exception:
+        pass
+
+    candidates = []
+    env_root = os.getenv("SEQ_LORA_ROOT")
+    if env_root:
+        candidates.append(Path(env_root))
+    candidates.append(Path.cwd())
+
+    for root in candidates:
+        root = Path(root)
+        if (root / "common_eval_utils.py").exists():
+            sys.path.insert(0, str(root))
+            import common_eval_utils as ceu  # type: ignore
+
+            return ceu
+
+    return None
+
+
+_CEU = _load_seq_lora_helpers()
+
+
+def _multiclass_brier_score(probs: torch.Tensor, labels: torch.Tensor) -> float:
+    one_hot = F.one_hot(labels, num_classes=probs.size(-1)).to(dtype=probs.dtype)
+    return float(((probs - one_hot) ** 2).sum(dim=-1).mean().item())
 
 
 class TFBLoRA(WrapperBase):
@@ -194,6 +231,7 @@ class TFBLoRA(WrapperBase):
         self.eval()
         status = self.training
         nlls = AverageMeter()
+        Accuracy, CalibrationError = _get_torchmetrics()
         metric_kwargs = {"task": "multiclass", "num_classes": self.num_classes}
         acc_metric = Accuracy(**metric_kwargs).to(self.accelerator.device)
         ece_metric = CalibrationError(**metric_kwargs, n_bins=self.args.num_bins).to(self.accelerator.device)
@@ -284,6 +322,108 @@ class TFBLoRA(WrapperBase):
             std = std.item()
         return val_acc, val_ece, val_nll, val_brier, val_flip_ratio, float(std)
 
+    def _evaluate_benchmark_common(self, eval_loader) -> Dict[str, float]:
+        if _CEU is None:
+            raise RuntimeError("common_eval_utils is required for benchmark_mcdataset evaluation.")
+
+        self.eval()
+        status = self.training
+        acc_metric = _CEU.make_accuracy(self.accelerator.device, self.num_classes)
+        ece_metric = _CEU.make_ece(self.accelerator.device, self.num_classes, int(self.args.num_bins))
+        acc_metric.reset()
+        ece_metric.reset()
+
+        total = 0
+        nll_sum = 0.0
+        flip_count = 0
+        total_count = 0
+        all_probs: List[torch.Tensor] = []
+        all_labels: List[torch.Tensor] = []
+        std_values: List[float] = []
+        samples_seen = 0
+        total_eval_batches = len(eval_loader)
+
+        for step, batch in enumerate(eval_loader):
+            with torch.no_grad(), torch.inference_mode():
+                logits_stochastic = self.forward_logits(
+                    batch,
+                    sample=True,
+                    n_samples=max(int(self.eval_n_samples), 1),
+                ).detach()
+                logits_deterministic = self.forward_logits(
+                    batch,
+                    sample=False,
+                    n_samples=max(int(self.eval_n_samples), 1),
+                ).detach()
+                _, labels, _ = batch
+                logits_stochastic, logits_deterministic, labels = self.accelerator.gather(
+                    [logits_stochastic, logits_deterministic, labels]
+                )
+                if self.accelerator.num_processes > 1:
+                    if step == len(eval_loader) - 1:
+                        keep = len(eval_loader.dataset) - samples_seen
+                        labels = labels[:keep]
+                        logits_stochastic = logits_stochastic[:keep]
+                        logits_deterministic = logits_deterministic[:keep]
+                    else:
+                        samples_seen += labels.shape[0]
+
+                bsz = int(labels.size(0))
+                total += bsz
+                probs_stochastic = torch.softmax(logits_stochastic, dim=-1).mean(dim=1)
+                probs_deterministic = torch.softmax(logits_deterministic, dim=-1).mean(dim=1)
+
+                pred_stochastic = probs_stochastic.argmax(dim=-1)
+                pred_deterministic = probs_deterministic.argmax(dim=-1)
+                flip_count += int((pred_stochastic != pred_deterministic).sum().item())
+                total_count += bsz
+
+                if self.eval_n_samples > 1:
+                    std_values.append(
+                        float(
+                            torch.softmax(logits_stochastic, dim=-1)
+                            .std(dim=1, unbiased=False)
+                            .mean()
+                            .item()
+                        )
+                    )
+                else:
+                    std_values.append(0.0)
+
+                idx = torch.arange(bsz, device=labels.device)
+                nll_sum += float((-torch.log(probs_stochastic[idx, labels].clamp_min(1e-12))).sum().item())
+                acc_metric.update(probs_stochastic, labels)
+                ece_metric.update(probs_stochastic, labels)
+                all_probs.append(probs_stochastic.detach().cpu())
+                all_labels.append(labels.detach().cpu())
+
+                self._maybe_log_progress(
+                    stage="TFB eval",
+                    step_idx=step,
+                    total_steps=total_eval_batches,
+                    extra=f"mc={self.eval_n_samples}",
+                )
+
+        probs_all = (
+            torch.cat(all_probs, dim=0)
+            if all_probs
+            else torch.empty((0, self.num_classes), dtype=torch.float32)
+        )
+        labels_all = (
+            torch.cat(all_labels, dim=0)
+            if all_labels
+            else torch.empty((0,), dtype=torch.long)
+        )
+        self.train(status)
+        return {
+            "nll": nll_sum / max(total, 1),
+            "acc": float(acc_metric.compute().item()),
+            "ece": float(ece_metric.compute().item()),
+            "brier": _multiclass_brier_score(probs_all, labels_all) if total > 0 else float("nan"),
+            "flip_ratio": float(flip_count / total_count) if total_count > 0 else 0.0,
+            "std": float(sum(std_values) / max(len(std_values), 1)),
+        }
+
                 
     def fit_evaluate(self):
         starttime = time.time()
@@ -349,6 +489,62 @@ class TFBLoRA(WrapperBase):
         endtime = time.time()
         if hasattr(self.args, 'bayes_eval_n_samples_final'):
             self.eval_n_samples = self.args.bayes_eval_n_samples_final
+
+        if _uses_trimmed_mc_head(self.args.dataset_type):
+            if _CEU is None:
+                raise RuntimeError("common_eval_utils is required for benchmark_mcdataset evaluation.")
+            eval_loaders = getattr(self, "eval_loaders", None) or {eval_task_name: self.test_loader}
+            eval_split_by_task = getattr(self, "eval_split_by_task", None) or {eval_task_name: eval_split_name}
+
+            for task_name, loader in eval_loaders.items():
+                split_name = str(eval_split_by_task.get(task_name, "ood"))
+                task_eval_tag = f"{task_name}({split_name})"
+                task_key = re.sub(r"[^0-9A-Za-z_]+", "_", str(task_name)).strip("_") or "eval"
+
+                with StageTimer(f"INFER TFB on {task_eval_tag}"):
+                    metrics = self._evaluate_benchmark_common(loader)
+                val_acc = metrics["acc"]
+                val_ece = metrics["ece"]
+                val_nll = metrics["nll"]
+                val_brier = metrics["brier"]
+                val_flip_ratio = metrics["flip_ratio"]
+                std = metrics["std"]
+
+                print(f"\n[{task_eval_tag}][TFB]")
+                print(
+                    f"  NLL={val_nll:.4f}  ACC={val_acc*100:.2f}%  "
+                    f"ECE={val_ece*100:.2f}%  Brier={val_brier:.4f}  "
+                    f"mc={int(self.eval_n_samples)}  beta={float(self.args.bayes_beta):.6f}  "
+                    f"std={float(std):.6f}  flip_ratio={float(val_flip_ratio):.6f}"
+                )
+
+                logging.info(
+                    f"{task_key}.tfb: "
+                    f"acc={val_acc}, ece={val_ece}, nll={val_nll}, brier={val_brier}, "
+                    f"time={endtime-starttime}, val_flip_ratio={val_flip_ratio}, "
+                    f"mc={int(self.eval_n_samples)}, beta={float(self.args.bayes_beta):.6f}, std={float(std):.6f}"
+                )
+                if self.accelerator.is_local_main_process and self.wandb_logger is not None:
+                    payload = {
+                        f"final_tfb_acc/{task_key}": val_acc,
+                        f"final_tfb_ece/{task_key}": val_ece,
+                        f"final_tfb_nll/{task_key}": val_nll,
+                        f"final_tfb_brier/{task_key}": val_brier,
+                        f"final_tfb_flip_ratio/{task_key}": val_flip_ratio,
+                        f"final_tfb_std/{task_key}": float(std),
+                    }
+                    if task_name == eval_task_name:
+                        payload.update(
+                            {
+                                "final_val_acc": val_acc,
+                                "final_val_ece": val_ece,
+                                "final_val_nll": val_nll,
+                                "final_val_brier": val_brier,
+                                "val_flip_ratio": val_flip_ratio,
+                            }
+                        )
+                    self.wandb_logger.log(payload)
+            return
 
         with StageTimer(f"INFER TFB on {eval_tag}"):
             val_acc, val_ece, val_nll, val_brier, val_flip_ratio, std = self.evaluate(self.test_loader)

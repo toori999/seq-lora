@@ -137,12 +137,6 @@ def trim_lm_head_to_choice_tokens(model: nn.Module, choice_token_ids: torch.Tens
         base.config.vocab_size = int(choice_token_ids.numel())
 
 
-def _force_lora_fp32(model: nn.Module) -> None:
-    for n, p in model.named_parameters():
-        if "lora_" in n:
-            p.data = p.data.to(dtype=torch.float32)
-
-
 def _mask_invalid_choices(logits: torch.Tensor, num_choices) -> torch.Tensor:
     if num_choices is None:
         return logits
@@ -184,7 +178,6 @@ def _load_base_and_adapter(task: str, map_adapter_dir: str, amp_dtype: torch.dty
 
     model = PeftModel.from_pretrained(base_model, map_adapter_dir).to(device)
     model.eval()
-    _force_lora_fp32(model)
     return tokenizer, model, num_classes
 
 

@@ -5,7 +5,6 @@ from run import get_modelwrapper
 
 from transformers import (
     AutoModelForCausalLM,
-    BitsAndBytesConfig,
     AutoTokenizer,
 )
 from peft import (
@@ -15,6 +14,33 @@ from peft import (
 
 def _is_benchmark_mc_dataset(args) -> bool:
     return str(getattr(args, "dataset_type", "")).strip().lower() == "benchmark_mcdataset"
+
+
+def _get_map_style_load_kwargs(device: torch.device) -> dict:
+    amp_dtype = (
+        torch.bfloat16
+        if (device.type == "cuda" and torch.cuda.is_bf16_supported())
+        else (torch.float16 if device.type == "cuda" else None)
+    )
+    return dict(
+        torch_dtype=amp_dtype,
+        trust_remote_code=False,
+    )
+
+
+def _load_model_map_style(model_name_or_path: str, device: torch.device) -> nn.Module:
+    load_kwargs = _get_map_style_load_kwargs(device)
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name_or_path,
+            attn_implementation="sdpa",
+            **load_kwargs,
+        )
+    except Exception:
+        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, **load_kwargs)
+    if hasattr(model.config, "use_cache"):
+        model.config.use_cache = False
+    return model
 
 
 def _get_single_token_id(tokenizer, s: str) -> int:
@@ -100,38 +126,9 @@ class CausalLM(nn.Module):
             accelerator.wait_for_everyone()
 
         benchmark_mc = _is_benchmark_mc_dataset(args)
-        if benchmark_mc:
-            device = accelerator.device if accelerator is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            amp_dtype = (
-                torch.bfloat16
-                if (device.type == "cuda" and torch.cuda.is_bf16_supported())
-                else (torch.float16 if device.type == "cuda" else None)
-            )
-            model_name_or_path = args.load_model_path if args.load_model_path is not None else args.model
-            load_kwargs = dict(
-                pretrained_model_name_or_path=model_name_or_path,
-                torch_dtype=amp_dtype,
-                trust_remote_code=False,
-            )
-            try:
-                model = AutoModelForCausalLM.from_pretrained(
-                    **load_kwargs,
-                    attn_implementation="sdpa",
-                )
-            except Exception:
-                model = AutoModelForCausalLM.from_pretrained(**load_kwargs)
-            if hasattr(model.config, "use_cache"):
-                model.config.use_cache = False
-        else:
-            bnb_config = BitsAndBytesConfig(load_in_8bit=args.load_in_8bit)
-            if args.load_model_path is not None:
-                model = AutoModelForCausalLM.from_pretrained(
-                    args.load_model_path, quantization_config=bnb_config
-                )
-            else:
-                model = AutoModelForCausalLM.from_pretrained(
-                    args.model, quantization_config=bnb_config
-                )
+        device = accelerator.device if accelerator is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model_name_or_path = args.load_model_path if args.load_model_path is not None else args.model
+        model = _load_model_map_style(model_name_or_path, device)
 
         if benchmark_mc:
             num_classes = int(getattr(args, "outdim", 0) or 0)

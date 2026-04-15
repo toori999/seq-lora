@@ -23,8 +23,8 @@ def add_experiment_args(parser: ArgumentParser) -> None:
                         help='Backbone type, one of the following: roberta-base, roberta-large')
     parser.add_argument('--model-type', type=str, required=True,
                         help='Backbone type, one of the following: roberta-base, roberta-large')
-    parser.add_argument('--load-in-8bit', type=bool, default=True, 
-                        help='Whether to load the model in 8-bit.')
+    parser.add_argument('--load-in-8bit', type=bool, default=False, 
+                        help='Deprecated and ignored. Models are always loaded with MAP-style full-precision weights.')
     
     # Optimization-specfiic arguments
     parser.add_argument('--loss', type=str, default='nll',

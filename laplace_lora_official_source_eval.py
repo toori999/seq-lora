@@ -227,12 +227,6 @@ def _resolve_base_model_name(adapter_dir: str, model_name_or_path: str) -> str:
     return str(peft_cfg.base_model_name_or_path)
 
 
-def _force_lora_fp32(model: nn.Module) -> None:
-    for name, param in model.named_parameters():
-        if "lora_" in name and param.dtype != torch.float32:
-            param.data = param.data.to(dtype=torch.float32)
-
-
 def _mask_invalid_choices(logits: torch.Tensor, num_choices: Optional[Sequence[int]]) -> torch.Tensor:
     if num_choices is None:
         return logits
@@ -682,7 +676,6 @@ def main() -> None:
     trim_lm_head_to_choice_tokens(base, choice_token_ids)
     print(f"[Head] trimmed lm_head to {num_classes} choice logits")
     model = PeftModel.from_pretrained(base, args.map_adapter_dir, is_trainable=True).to(device)
-    _force_lora_fp32(model)
     model.eval()
 
     selected_param_names = _configure_laplace_trainable_params(model, args.laplace_sub)

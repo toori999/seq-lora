@@ -132,7 +132,13 @@ class WrapperBase(PeftModel):
         self.accelerator = accelerator
         self.target_ids = None
 
-        self.batch_size = args.batch_size
+        # Evaluation-only flows may omit --batch-size entirely. Fall back to the
+        # eval batch size so shared scheduler/step bookkeeping still initializes.
+        effective_batch_size = int(
+            getattr(args, "batch_size", 0) or getattr(args, "eval_batch_size", 48) or 1
+        )
+        self.batch_size = effective_batch_size
+        self.args.batch_size = effective_batch_size
         self.num_epochs = args.n_epochs
         self.num_training_steps = args.max_train_steps
         self.step = 0
@@ -140,7 +146,7 @@ class WrapperBase(PeftModel):
         self.eval_n_samples = 1
 
         if args.max_train_steps == 0:
-            num_training_steps = args.num_samples * args.n_epochs // args.batch_size
+            num_training_steps = args.num_samples * args.n_epochs // effective_batch_size
         else:
             num_training_steps = args.max_train_steps
         warmup_steps = num_training_steps * args.warmup_ratio
@@ -389,6 +395,9 @@ class WrapperBase(PeftModel):
         self.wandb_logger = wandb_logger
         self.dataset_obj = dataset
         train_loader, test_loader = dataset.train_dataloader, dataset.test_dataloader
+        raw_eval_loaders = dict(getattr(dataset, "eval_loaders", {}) or {})
+        raw_eval_splits = dict(getattr(dataset, "eval_split_name_by_task", {}) or {})
+        source_task = str(getattr(dataset, "source_task", self.args.dataset))
         
         anchor_loader = getattr(dataset, "anchor_dataloader", None)
         if anchor_loader is not None:
@@ -424,3 +433,37 @@ class WrapperBase(PeftModel):
 
         self.train_loader = train_loader
         self.test_loader = test_loader
+        self.eval_loaders = {}
+        self.eval_split_by_task = {}
+        if raw_eval_loaders:
+            if source_task in raw_eval_loaders:
+                self.eval_loaders[source_task] = self.test_loader
+                self.eval_split_by_task[source_task] = str(
+                    raw_eval_splits.get(
+                        source_task,
+                        getattr(
+                            dataset,
+                            "source_eval_split_name",
+                            getattr(dataset, "eval_split_name", "validation"),
+                        ),
+                    )
+                )
+
+            extra_eval_items = [
+                (task_name, loader)
+                for task_name, loader in raw_eval_loaders.items()
+                if task_name != source_task
+            ]
+            if extra_eval_items:
+                prepared = self.accelerator.prepare(*[loader for _, loader in extra_eval_items])
+                if len(extra_eval_items) == 1:
+                    prepared = (prepared,)
+                for (task_name, _), prepared_loader in zip(extra_eval_items, prepared):
+                    self.eval_loaders[task_name] = prepared_loader
+                    self.eval_split_by_task[task_name] = str(raw_eval_splits.get(task_name, "ood"))
+        else:
+            eval_task_name = str(getattr(dataset, "eval_task_name", source_task))
+            self.eval_loaders[eval_task_name] = self.test_loader
+            self.eval_split_by_task[eval_task_name] = str(
+                getattr(dataset, "eval_split_name", getattr(dataset, "source_eval_split_name", "validation"))
+            )

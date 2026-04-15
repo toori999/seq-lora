@@ -24,7 +24,6 @@ from transformers import PreTrainedModel
 
 from peft.config import PeftConfig
 from peft.tuners.lora import LoraLayer, Linear
-from peft.tuners.lora.bnb import Linear8bitLt
 
 
 torch.autograd.set_detect_anomaly(True)
@@ -169,7 +168,8 @@ def _load_clora_extra_state(model: nn.Module, extra_path: str) -> None:
         raise RuntimeError(f"Malformed C-LoRA extra state: {extra_path}")
     model.load_state_dict(saved, strict=False)
     print(f"[C-LoRA] loaded contextual state from: {extra_path}")
-   
+
+
 def update_lora_layer(self, adapter_name):
     for adapter_name in self._active_adapter:
         if adapter_name not in self.lora_A.keys():
@@ -604,15 +604,6 @@ class clora(WrapperBaseeceprf):
                 self._wrap_lora_layer(child)
                 # modify existing methods
                 setattr(child, 'forward', lightblob_linear_forward.__get__(child, child.__class__))
-                # add new methods
-                setattr(child, 'div_posterior_prior', div_posterior_prior.__get__(child, child.__class__))
-                setattr(child, 'sample', sample.__get__(child, child.__class__))
-            if isinstance(child, LoraLayer) and isinstance(child, Linear8bitLt):
-                setattr(child, 'update_layer', update_lora_layer.__get__(child, child.__class__))
-                child.update_layer(child._active_adapter)
-                self._wrap_lora_layer(child)
-                # modify existing methods
-                setattr(child, 'forward', lightblob_8bitlinear_forward.__get__(child, child.__class__))
                 # add new methods
                 setattr(child, 'div_posterior_prior', div_posterior_prior.__get__(child, child.__class__))
                 setattr(child, 'sample', sample.__get__(child, child.__class__))

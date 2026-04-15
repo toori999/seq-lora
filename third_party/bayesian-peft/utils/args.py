@@ -53,8 +53,8 @@ def add_experiment_args(parser: ArgumentParser) -> None:
     parser.add_argument(
         "--load-in-8bit",
         type=bool,
-        default=True,
-        help="Whether to load the model weights in 8-bit precision for memory optimization. Default is True.",
+        default=False,
+        help="Deprecated and ignored. Models are always loaded with MAP-style full-precision weights.",
     )
 
     # Optimization-specific arguments

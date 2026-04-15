@@ -20,7 +20,6 @@ from transformers import PreTrainedModel
 
 from peft.config import PeftConfig
 from peft.tuners.lora import LoraLayer, Linear
-from peft.tuners.lora.bnb import Linear8bitLt
 
 
 ## Model Specific Argument Parsing
@@ -127,7 +126,7 @@ def _iter_lora_linear_modules(model: nn.Module):
     for name, mod in model.named_modules():
         if not isinstance(mod, LoraLayer):
             continue
-        if isinstance(mod, Linear) or isinstance(mod, Linear8bitLt):
+        if isinstance(mod, Linear):
             yield name, mod
 
 
@@ -522,21 +521,6 @@ class BLoB(WrapperBase):
                     child,
                     "forward",
                     blob_linear_forward.__get__(child, child.__class__),
-                )
-                # add new methods
-                setattr(
-                    child,
-                    "div_posterior_prior",
-                    div_posterior_prior.__get__(child, child.__class__),
-                )
-                setattr(child, "sample", sample.__get__(child, child.__class__))
-            if isinstance(child, LoraLayer) and isinstance(child, Linear8bitLt):
-                self._wrap_lora_layer(child)
-                # modify existing methods
-                setattr(
-                    child,
-                    "forward",
-                    blob_8bitlinear_forward.__get__(child, child.__class__),
                 )
                 # add new methods
                 setattr(
