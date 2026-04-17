@@ -163,6 +163,11 @@ def _multiclass_brier_score(probs: Tensor, labels: Tensor) -> float:
     return float(((probs - one_hot) ** 2).sum(dim=-1).mean().item())
 
 
+def _multiclass_brier_sum(probs: Tensor, labels: Tensor) -> float:
+    one_hot = F.one_hot(labels, num_classes=probs.size(-1)).to(dtype=probs.dtype)
+    return float(((probs - one_hot) ** 2).sum(dim=-1).sum().item())
+
+
 def _mask_invalid_choices(logits: Tensor, num_choices: Optional[Sequence[int]]) -> Tensor:
     if num_choices is None:
         return logits
@@ -736,85 +741,69 @@ def eval_bayes_fast_restricted_4way_probmean(
 
     weight_tensors = [spec.weight.data for spec in lora_cache]
     eps = 1e-12
-
-    # 1. 预先将测试集完全加载到 GPU 显存中，避免反复的 Host->Device 拷贝
-    cached_batches = []
-    total_samples = 0
-    for batch in loader:
-        lengths_cpu = batch["attention_mask"].sum(dim=1)
-        Lmax = max(int(lengths_cpu.max().item()), 1)
-        
-        # Left padding keeps real tokens on the right, so trim from the right edge.
-        ids = batch["input_ids"][:, -Lmax:].to(device, non_blocking=True)
-        attn = batch["attention_mask"][:, -Lmax:].to(device, non_blocking=True)
-        labs = batch["labels"].to(device, non_blocking=True)
-        num_choices = batch.get("num_choices")
-
-        cached_batches.append((ids, attn, labs, num_choices))
-        total_samples += labs.size(0)
-
-    # 预分配全局概率张量和标签
-    probs_acc_global = torch.zeros((total_samples, num_classes), device=device, dtype=torch.float32)
-    labels_global = torch.zeros(total_samples, device=device, dtype=torch.long)
-    
-    idx = 0
-    for (_, _, labs, _) in cached_batches:
-        bsz = labs.size(0)
-        labels_global[idx : idx + bsz] = labs
-        idx += bsz
-
-    bayes_t0 = time.perf_counter()
-    # 2. Sample 在外层，Batch 在内层；mc_eval_chunk 只限制每次取出的样本块大小。
-    # Avoid per-batch progress/ETA formatting here because host-side logging
-    # noticeably slows down long MC runs.
-    for chunk_start in range(0, S, chunk_size):
-        chunk_end = min(chunk_start + chunk_size, S)
-        x_chunk = x_samples_T[chunk_start:chunk_end].contiguous()
-        for local_idx in range(x_chunk.shape[0]):
-            s = chunk_start + local_idx
-            deltas_s = _compute_deltas_for_one_sample(lora_cache, x_chunk[local_idx], scale)
-            torch._foreach_add_(weight_tensors, deltas_s)
-
-            idx = 0
-            for (ids_mb, attn_mb, _, num_choices_mb) in cached_batches:
-                bsz = ids_mb.size(0)
-                logits = compute_choice_logits(
-                    model=model,
-                    input_ids=ids_mb,
-                    attention_mask=attn_mb,
-                    amp_dtype=amp_dtype,
-                )
-                logits = _mask_invalid_choices(logits, num_choices_mb)
-                probs_acc_global[idx : idx + bsz].add_(torch.softmax(logits, dim=-1))
-                idx += bsz
-
-            torch._foreach_sub_(weight_tensors, deltas_s)
-        del x_chunk
-
-    bayes_extra_time = time.perf_counter() - bayes_t0
-
-    # 3. 计算最终的贝叶斯平均概率 (BMA)
-    probs_bayes_global = probs_acc_global / float(S)
-
-    if temp_bayes != 1.0:
-        p = probs_bayes_global.clamp_min(eps) ** (1.0 / float(temp_bayes))
-        probs_bayes_global = p / p.sum(dim=-1, keepdim=True)
-
-    p_y = probs_bayes_global[torch.arange(total_samples, device=device), labels_global].clamp_min(eps)
-    nll_bayes = float((-torch.log(p_y)).sum().item()) / max(total_samples, 1)
-    brier_bayes = _multiclass_brier_score(probs_bayes_global, labels_global)
-
     acc_bay_m = _make_accuracy(device, num_classes=num_classes)
     acc_bay_m.reset()
     ece_bay_m = _make_ece(device, num_classes=num_classes, n_bins=10)
     ece_bay_m.reset()
+    total_samples = 0
+    nll_sum = 0.0
+    brier_sum = 0.0
 
-    acc_bay_m.update(probs_bayes_global, labels_global)
-    ece_bay_m.update(probs_bayes_global, labels_global)
+    bayes_t0 = time.perf_counter()
+    for batch in loader:
+        lengths_cpu = batch["attention_mask"].sum(dim=1)
+        Lmax = max(int(lengths_cpu.max().item()), 1)
+
+        ids = batch["input_ids"][:, -Lmax:].to(device, non_blocking=True)
+        attn = batch["attention_mask"][:, -Lmax:].to(device, non_blocking=True)
+        labels = batch["labels"].to(device, non_blocking=True)
+        num_choices = batch.get("num_choices")
+        bsz = int(labels.size(0))
+        total_samples += bsz
+
+        probs_acc_batch = torch.zeros((bsz, num_classes), device=device, dtype=torch.float32)
+
+        for chunk_start in range(0, S, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, S)
+            x_chunk = x_samples_T[chunk_start:chunk_end].to(
+                device=device,
+                dtype=torch.float32,
+                non_blocking=True,
+            ).contiguous()
+            for local_idx in range(x_chunk.shape[0]):
+                deltas_s = _compute_deltas_for_one_sample(lora_cache, x_chunk[local_idx], scale)
+                torch._foreach_add_(weight_tensors, deltas_s)
+
+                logits = compute_choice_logits(
+                    model=model,
+                    input_ids=ids,
+                    attention_mask=attn,
+                    amp_dtype=amp_dtype,
+                )
+                logits = _mask_invalid_choices(logits, num_choices)
+                probs_acc_batch.add_(torch.softmax(logits, dim=-1))
+
+                torch._foreach_sub_(weight_tensors, deltas_s)
+            del x_chunk
+
+        probs_bayes_batch = probs_acc_batch / float(S)
+
+        if temp_bayes != 1.0:
+            p = probs_bayes_batch.clamp_min(eps) ** (1.0 / float(temp_bayes))
+            probs_bayes_batch = p / p.sum(dim=-1, keepdim=True)
+
+        idx = torch.arange(bsz, device=device)
+        nll_sum += float((-torch.log(probs_bayes_batch[idx, labels].clamp_min(eps))).sum().item())
+        brier_sum += _multiclass_brier_sum(probs_bayes_batch, labels)
+        acc_bay_m.update(probs_bayes_batch, labels)
+        ece_bay_m.update(probs_bayes_batch, labels)
+        del probs_acc_batch, probs_bayes_batch, ids, attn, labels
+
+    bayes_extra_time = time.perf_counter() - bayes_t0
 
     metrics = {
-        "nll_bayes": nll_bayes,
-        "brier_bayes": brier_bayes,
+        "nll_bayes": nll_sum / max(total_samples, 1),
+        "brier_bayes": brier_sum / max(total_samples, 1),
         "ece_bayes": float(ece_bay_m.compute().item()),
         "acc_bayes": float(acc_bay_m.compute().item()),
         "mc_samples_used": float(S),
@@ -1389,11 +1378,7 @@ def main():
         else:
             _report_scalar_constant_q_results(args.s_q)
         del mu_global_list
-        x_samples_T = torch.cat(x_sample_parts, dim=1).to(
-            device=device,
-            dtype=torch.float32,
-            non_blocking=True,
-        )
+        x_samples_T = torch.cat(x_sample_parts, dim=1).to(dtype=torch.float32)
         del x_sample_parts
 
     lora_cache = build_loraA_cache(model, module_specs, device=device)

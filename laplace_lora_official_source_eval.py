@@ -513,8 +513,7 @@ def eval_map_source_style(
     total = 0
     nll_sum = 0.0
     eps = 1e-12
-    all_probs: List[torch.Tensor] = []
-    all_labels: List[torch.Tensor] = []
+    brier_sum = 0.0
 
     for batch in loader:
         labels = batch["labels"].to(device, non_blocking=True)
@@ -524,16 +523,19 @@ def eval_map_source_style(
         nll_sum += float((-torch.log(probs[torch.arange(bsz, device=device), labels].clamp_min(eps))).sum().item())
         acc_m.update(probs, labels)
         ece_m.update(probs, labels)
-        all_probs.append(probs.detach().cpu())
-        all_labels.append(labels.detach().cpu())
+        brier_sum += float(
+            (probs - torch.nn.functional.one_hot(labels, num_classes=num_classes))
+            .pow(2)
+            .sum(dim=-1)
+            .sum()
+            .item()
+        )
 
-    probs_all = torch.cat(all_probs, dim=0) if all_probs else torch.empty((0, num_classes), dtype=torch.float32)
-    labels_all = torch.cat(all_labels, dim=0) if all_labels else torch.empty((0,), dtype=torch.long)
     return {
         "nll": nll_sum / max(total, 1),
         "acc": float(acc_m.compute().item()),
         "ece": float(ece_m.compute().item()),
-        "brier": (_multiclass_brier_score(probs_all, labels_all) if total > 0 else float("nan")),
+        "brier": (brier_sum / max(total, 1) if total > 0 else float("nan")),
     }
 
 
@@ -554,8 +556,7 @@ def eval_laplace_source_mc_corr(
     total = 0
     nll_sum = 0.0
     eps = 1e-12
-    all_probs: List[torch.Tensor] = []
-    all_labels: List[torch.Tensor] = []
+    brier_sum = 0.0
 
     total_samples = len(loader.dataset) if hasattr(loader, "dataset") else None
     progress_total = total_samples if total_samples is not None else len(loader)
@@ -583,8 +584,13 @@ def eval_laplace_source_mc_corr(
         total += bsz
         acc_m.update(probs, labels)
         ece_m.update(probs, labels)
-        all_probs.append(probs.detach().cpu())
-        all_labels.append(labels.detach().cpu())
+        brier_sum += float(
+            (probs - torch.nn.functional.one_hot(labels, num_classes=num_classes))
+            .pow(2)
+            .sum(dim=-1)
+            .sum()
+            .item()
+        )
         del f_mu, f_var, probs, batch
 
         elapsed = time.perf_counter() - progress_start
@@ -600,13 +606,11 @@ def eval_laplace_source_mc_corr(
         batch_iter.set_postfix(avg_s_per_sample=f"{avg_sec_per_sample:.3f}", eta=eta, refresh=False)
 
     batch_iter.close()
-    probs_all = torch.cat(all_probs, dim=0) if all_probs else torch.empty((0, num_classes), dtype=torch.float32)
-    labels_all = torch.cat(all_labels, dim=0) if all_labels else torch.empty((0,), dtype=torch.long)
     return {
         "nll": nll_sum / max(total, 1),
         "acc": float(acc_m.compute().item()),
         "ece": float(ece_m.compute().item()),
-        "brier": (_multiclass_brier_score(probs_all, labels_all) if total > 0 else float("nan")),
+        "brier": (brier_sum / max(total, 1) if total > 0 else float("nan")),
     }
 
 
@@ -619,16 +623,16 @@ def main() -> None:
     ap.add_argument("--eval_tasks", type=str, default="iid")
     ap.add_argument("--max_length", type=int, default=300)
     ap.add_argument("--per_device_eval_batch_size", type=int, default=32)
-    ap.add_argument("--fit_bsz", type=int, default=2)
-    ap.add_argument("--laplace_bsz", type=int, default=32)
+    ap.add_argument("--fit_bsz", type=int, default=32)
+    ap.add_argument("--laplace_bsz", type=int, default=16)
     ap.add_argument("--laplace_hessian", type=str, default="kron", choices=["kron"])
     ap.add_argument("--laplace_sub", type=str, default="all", choices=["last_layer", "all"])
     ap.add_argument("--testing_set", type=str, default="val", choices=["val", "train_val"])
     ap.add_argument("--prior_var", type=float, default=1.0)
     ap.add_argument("--prior_opt_lr", type=float, default=1e-1)
-    ap.add_argument("--prior_optim_step", type=int, default=100)
-    ap.add_argument("--laplace_mc_samples", type=int, default=100000)
-    ap.add_argument("--laplace_mc_chunk", type=int, default=512)
+    ap.add_argument("--prior_optim_step", type=int, default=1000)
+    ap.add_argument("--laplace_mc_samples", type=int, default=1000)
+    ap.add_argument("--laplace_mc_chunk", type=int, default=128)
     ap.add_argument("--seed", type=int, default=FIXED_INTERNAL_SEED)
     ap.add_argument("--attn_implementation", type=str, default="sdpa")
     ap.add_argument("--force_refit", action="store_true", help="Ignore saved KFAC/Hessian cache and recompute la.fit().")

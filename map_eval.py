@@ -226,8 +226,7 @@ def eval_map_one_dataset(model, loader, device, amp_dtype):
 
     total = 0
     nll_sum = 0.0
-    all_probs = []
-    all_labels = []
+    brier_sum = 0.0
 
     for batch in loader:
         input_ids = batch["input_ids"].to(device, non_blocking=True)
@@ -248,17 +247,20 @@ def eval_map_one_dataset(model, loader, device, amp_dtype):
         probs = torch.softmax(logits, dim=-1)
         acc_m.update(probs, labels)
         ece_m.update(probs, labels)
-        all_probs.append(probs.detach())
-        all_labels.append(labels.detach())
+        brier_sum += float(
+            (probs - torch.nn.functional.one_hot(labels, num_classes=num_classes))
+            .pow(2)
+            .sum(dim=-1)
+            .sum()
+            .item()
+        )
         total += labels.size(0)
 
-    probs_all = torch.cat(all_probs, dim=0) if all_probs else torch.empty((0, num_classes), device=device)
-    labels_all = torch.cat(all_labels, dim=0) if all_labels else torch.empty((0,), dtype=torch.long, device=device)
     return {
         "nll": nll_sum / max(total, 1),
         "acc": float(acc_m.compute().item()),
         "ece": float(ece_m.compute().item()),
-        "brier": (_multiclass_brier_score(probs_all, labels_all) if total > 0 else float("nan")),
+        "brier": (brier_sum / max(total, 1) if total > 0 else float("nan")),
     }
 
 

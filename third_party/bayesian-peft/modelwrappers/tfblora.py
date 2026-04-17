@@ -337,8 +337,7 @@ class TFBLoRA(WrapperBase):
         nll_sum = 0.0
         flip_count = 0
         total_count = 0
-        all_probs: List[torch.Tensor] = []
-        all_labels: List[torch.Tensor] = []
+        brier_sum = 0.0
         std_values: List[float] = []
         samples_seen = 0
         total_eval_batches = len(eval_loader)
@@ -394,8 +393,13 @@ class TFBLoRA(WrapperBase):
                 nll_sum += float((-torch.log(probs_stochastic[idx, labels].clamp_min(1e-12))).sum().item())
                 acc_metric.update(probs_stochastic, labels)
                 ece_metric.update(probs_stochastic, labels)
-                all_probs.append(probs_stochastic.detach().cpu())
-                all_labels.append(labels.detach().cpu())
+                brier_sum += float(
+                    (probs_stochastic - F.one_hot(labels, num_classes=self.num_classes))
+                    .pow(2)
+                    .sum(dim=-1)
+                    .sum()
+                    .item()
+                )
 
                 self._maybe_log_progress(
                     stage="TFB eval",
@@ -404,22 +408,12 @@ class TFBLoRA(WrapperBase):
                     extra=f"mc={self.eval_n_samples}",
                 )
 
-        probs_all = (
-            torch.cat(all_probs, dim=0)
-            if all_probs
-            else torch.empty((0, self.num_classes), dtype=torch.float32)
-        )
-        labels_all = (
-            torch.cat(all_labels, dim=0)
-            if all_labels
-            else torch.empty((0,), dtype=torch.long)
-        )
         self.train(status)
         return {
             "nll": nll_sum / max(total, 1),
             "acc": float(acc_metric.compute().item()),
             "ece": float(ece_metric.compute().item()),
-            "brier": _multiclass_brier_score(probs_all, labels_all) if total > 0 else float("nan"),
+            "brier": (brier_sum / max(total, 1) if total > 0 else float("nan")),
             "flip_ratio": float(flip_count / total_count) if total_count > 0 else 0.0,
             "std": float(sum(std_values) / max(len(std_values), 1)),
         }

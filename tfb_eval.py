@@ -390,9 +390,8 @@ def evaluate_tfb_official_style(
     total = 0
     flip_count = 0
     total_count = 0
+    brier_sum = 0.0
     last_std = 0.0
-    all_probs: List[torch.Tensor] = []
-    all_labels: List[torch.Tensor] = []
 
     total_samples = len(loader.dataset) if hasattr(loader, "dataset") else None
     progress_start = time.perf_counter()
@@ -444,8 +443,13 @@ def evaluate_tfb_official_style(
         acc_metric.update(probs_stochastic, labels)
         ece_metric.update(probs_stochastic, labels)
         nll_sum += float((-torch.log(probs_stochastic[torch.arange(bsz, device=device), labels].clamp_min(1e-12))).sum().item())
-        all_probs.append(probs_stochastic.detach().cpu())
-        all_labels.append(labels.detach().cpu())
+        brier_sum += float(
+            (probs_stochastic - torch.nn.functional.one_hot(labels, num_classes=num_classes))
+            .pow(2)
+            .sum(dim=-1)
+            .sum()
+            .item()
+        )
 
         elapsed = time.perf_counter() - progress_start
         avg_sec_per_sample = elapsed / max(total, 1)
@@ -462,13 +466,11 @@ def evaluate_tfb_official_style(
     progress.close()
     set_blob_sampling(model, "default", True)
 
-    probs_all = torch.cat(all_probs, dim=0) if all_probs else torch.empty((0, num_classes), dtype=torch.float32)
-    labels_all = torch.cat(all_labels, dim=0) if all_labels else torch.empty((0,), dtype=torch.long)
     return {
         "nll": nll_sum / max(total, 1),
         "acc": float(acc_metric.compute().item()),
         "ece": float(ece_metric.compute().item()),
-        "brier": _multiclass_brier_score(probs_all, labels_all) if total > 0 else float("nan"),
+        "brier": (brier_sum / max(total, 1) if total > 0 else float("nan")),
         "std": last_std,
         "flip_ratio": (float(flip_count) / float(total_count) if total_count > 0 else 0.0),
     }
