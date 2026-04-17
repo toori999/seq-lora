@@ -11,17 +11,16 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
+from datasets import Dataset, DatasetDict
 from transformers import AutoModelForCausalLM, AutoTokenizer, get_linear_schedule_with_warmup
 from peft import LoraConfig, TaskType, get_peft_model
 
 from common_eval_utils import (
     DynamicEvalCollator,
-    answer_key_to_index,
-    get_choice_labels,
     get_choice_token_ids,
     get_transformer_and_lm_head,
-    make_prompt_from_choices,
+    load_task_dataset,
+    preprocess_task,
 )
 
 try:
@@ -35,19 +34,18 @@ except Exception:
     pass
 
 BASE_MODEL_NAME = "Qwen/Qwen3-8B-Base"
-DATASET_NAME = "tcallens/scienceqa-text-only"
 TRUST_REMOTE_CODE = False
 ATTN_IMPLEMENTATION = "sdpa"
 FALLBACK_ATTN_IMPLEMENTATION = "sdpa"
 
-RUN_TAG = "scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad"
-OUTPUT_DIR = "./iid_qwen35_8b_scienceqa_lora_map_leftpad"
+TASK_NAME = "obqa"
+RUN_TAG = "obqa_qv_lmhead_leftpad"
+OUTPUT_DIR = "./iid_qwen35_8b_obqa_lora_map_leftpad"
 SLICE_OUT_DIR = f"./slice_data/{RUN_TAG}/kfac_balanced"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-GRADE_MIN = 2
-GRADE_MAX = 11
-TASK_FILTER = "closed choice"
+NUM_SLICES = 10
+SLICE_PARTITION_SEED = 0
 
 MAX_SEQ_LEN = 300
 LR = 5e-5
@@ -74,8 +72,8 @@ LORA_DROPOUT = 0.05
 
 FULL_ATTENTION_TARGET_MODULES = ["q_proj", "v_proj"]
 LM_HEAD_TARGET_MODULES = ["lm_head"]
-MAX_CHOICES = 4
-SOURCE_EVAL_SPLIT = "test"
+NUM_CLASSES = 4
+SOURCE_EVAL_SPLIT = "validation"
 
 SEEDS = [0]
 TOKENIZER_PADDING_SIDE = "left"
@@ -179,13 +177,6 @@ def compute_ece(probs: torch.Tensor, labels: torch.Tensor, n_bins: int = 15) -> 
     return float(ece.item())
 
 
-def parse_grade_num(grade_value) -> int:
-    text = str(grade_value).strip().lower()
-    if text.startswith("grade"):
-        return int(text.replace("grade", ""))
-    raise ValueError(f"Unexpected grade format: {grade_value}")
-
-
 def resolve_all_layer_target_modules(model: nn.Module) -> List[str]:
     wanted_full_attention = set(FULL_ATTENTION_TARGET_MODULES)
     wanted_lm_head = set(LM_HEAD_TARGET_MODULES)
@@ -214,12 +205,6 @@ def freeze_base_enable_lora(model: nn.Module) -> None:
     for name, p in model.named_parameters():
         if "lora_" in name:
             p.requires_grad = True
-
-
-def force_lora_fp32(model: nn.Module) -> None:
-    for name, p in model.named_parameters():
-        if "lora_" in name:
-            p.data = p.data.float()
 
 
 _LORA_ADAPTER_PLACEHOLDER = "__adapter__"
@@ -268,43 +253,24 @@ def sync_or_create_shared_lora_init(model: nn.Module, init_path: str, adapter_na
         print(f"[Init LoRA] saved shared init to {init_path}")
 
 
+def assign_random_slice_ids(train_ds: Dataset, num_slices: int, seed: int) -> Dataset:
+    if num_slices <= 0:
+        raise ValueError(f"num_slices must be positive, got {num_slices}")
+    perm = np.random.default_rng(seed).permutation(len(train_ds))
+    slice_ids = np.empty(len(train_ds), dtype=np.int32)
+    for sid, idxs in enumerate(np.array_split(perm, num_slices)):
+        slice_ids[idxs] = sid
+    if "slice_id" in train_ds.column_names:
+        train_ds = train_ds.remove_columns(["slice_id"])
+    return train_ds.add_column("slice_id", slice_ids.tolist())
+
+
 def save_kfac_balanced_dataset(train_ds: Dataset) -> None:
     os.makedirs(os.path.dirname(SLICE_OUT_DIR), exist_ok=True)
     order = np.argsort(np.asarray(train_ds["slice_id"], dtype=np.int32)).tolist()
     ds_dict = DatasetDict({"train": train_ds.select(order)})
     ds_dict.save_to_disk(SLICE_OUT_DIR)
     print(f"[Save] kfac_balanced slices -> {SLICE_OUT_DIR}")
-
-
-def _coerce_choices(choices_obj) -> List[str]:
-    if isinstance(choices_obj, np.ndarray):
-        values = choices_obj.tolist()
-    elif isinstance(choices_obj, (list, tuple)):
-        values = list(choices_obj)
-    else:
-        values = []
-    return [str(x).strip() for x in values if str(x).strip()]
-
-
-def _mask_invalid_choices(cand_logits: torch.Tensor, num_choices: Sequence[int]) -> torch.Tensor:
-    num_choices_t = torch.tensor([int(x) for x in num_choices], device=cand_logits.device, dtype=torch.long)
-    if int(num_choices_t.min().item()) < 2 or int(num_choices_t.max().item()) > cand_logits.size(-1):
-        raise ValueError(
-            f"num_choices must be in [2, {cand_logits.size(-1)}], got "
-            f"min={int(num_choices_t.min().item())} max={int(num_choices_t.max().item())}"
-        )
-    col_idx = torch.arange(cand_logits.size(-1), device=cand_logits.device).view(1, -1)
-    invalid = col_idx >= num_choices_t.view(-1, 1)
-    return cand_logits.masked_fill(invalid, -1e9)
-
-
-def _left_padded_last_idx(input_ids: torch.Tensor) -> torch.Tensor:
-    return torch.full(
-        (input_ids.size(0),),
-        input_ids.size(1) - 1,
-        device=input_ids.device,
-        dtype=torch.long,
-    )
 
 
 def trim_lm_head_to_choice_tokens(model: nn.Module, choice_token_ids: torch.Tensor) -> None:
@@ -355,116 +321,14 @@ def compute_choice_logits(
     return logits.float()
 
 
-def _print_grade_summary(prefix: str, ds: Dataset) -> None:
-    grade_counts: Dict[int, int] = {}
-    choice_counts: Dict[int, int] = {}
-    for grade_num in ds["grade_num"]:
-        g = int(grade_num)
-        grade_counts[g] = grade_counts.get(g, 0) + 1
-    for num_choices in ds["num_choices"]:
-        k = int(num_choices)
-        choice_counts[k] = choice_counts.get(k, 0) + 1
-
+def _print_split_summary(prefix: str, ds: Dataset) -> None:
     print(f"[{prefix}] total={len(ds)}")
-    for grade_num in sorted(grade_counts):
-        print(f"  grade{grade_num}: {grade_counts[grade_num]}")
-    print(
-        f"[{prefix}] choice-counts="
-        + ", ".join(f"{k}-choice={choice_counts[k]}" for k in sorted(choice_counts))
-    )
 
 
-def load_scienceqa_train_val() -> tuple[Dataset, Dataset]:
-    ds = load_dataset(DATASET_NAME)
-    train_raw = ds["train"]
-    eval_raw = ds[SOURCE_EVAL_SPLIT]
-
-    def _keep(ex: Dict) -> bool:
-        try:
-            grade_num = parse_grade_num(ex["grade"])
-        except Exception:
-            return False
-        return (
-            str(ex.get("task", "")).strip().lower() == TASK_FILTER
-            and GRADE_MIN <= grade_num <= GRADE_MAX
-        )
-
-    def _add_meta(ex: Dict) -> Dict:
-        grade_num = parse_grade_num(ex["grade"])
-        return {
-            "grade_num": grade_num,
-            "slice_id": grade_num - GRADE_MIN,
-            "num_choices": len(_coerce_choices(ex["choices"])),
-        }
-
-    train_raw = train_raw.filter(_keep).map(_add_meta)
-    eval_raw = eval_raw.filter(_keep).map(_add_meta)
-    return train_raw, eval_raw
-
-
-def order_train_by_grade(train_raw: Dataset, seed: int) -> Dataset:
-    parts: List[Dataset] = []
-    for grade_num in range(GRADE_MIN, GRADE_MAX + 1):
-        idxs = [i for i, g in enumerate(train_raw["grade_num"]) if int(g) == grade_num]
-        if not idxs:
-            continue
-        ds_g = train_raw.select(idxs).shuffle(seed=seed + grade_num)
-        parts.append(ds_g)
-    if not parts:
-        raise RuntimeError("No training examples left after grade filtering.")
-    return parts[0] if len(parts) == 1 else concatenate_datasets(parts)
-
-
-def preprocess_scienceqa(
-    ds: Dataset,
-    tokenizer: AutoTokenizer,
-    max_len: int,
-    keep_slice_id: bool = False,
-) -> Dataset:
-    keep_extra = [c for c in ["slice_id", "grade_num", "num_choices"] if keep_slice_id and c in ds.column_names]
-    if not keep_slice_id and "num_choices" in ds.column_names:
-        keep_extra = ["num_choices"]
-
-    def _fn(batch: Dict) -> Dict:
-        prompts: List[str] = []
-        labels: List[int] = []
-        valid_num_choices: List[int] = []
-
-        for i in range(len(batch["question"])):
-            try:
-                choices = _coerce_choices(batch["choices"][i])
-                k = len(choices)
-                if k < 2 or k > MAX_CHOICES:
-                    raise ValueError(f"unsupported num_choices={k}")
-                label_order = get_choice_labels(k)
-                mapping = {label_order[j]: choices[j] for j in range(k)}
-                answer = answer_key_to_index(batch["answer"][i], label_order)
-                prompt = make_prompt_from_choices(str(batch["question"][i]), mapping, label_order=label_order)
-                prompts.append(prompt)
-                labels.append(answer)
-                valid_num_choices.append(k)
-            except Exception:
-                prompts.append("")
-                labels.append(-1)
-                valid_num_choices.append(-1)
-
-        enc = tokenizer(
-            prompts,
-            padding=False,
-            truncation=True,
-            max_length=max_len,
-        )
-        enc["labels"] = labels
-        enc["num_choices"] = valid_num_choices
-        for k in keep_extra:
-            if k != "num_choices":
-                enc[k] = batch[k]
-        return enc
-
-    ds2 = ds.map(_fn, batched=True)
-    ds2 = ds2.filter(lambda ex: ex["labels"] != -1 and 2 <= int(ex["num_choices"]) <= MAX_CHOICES)
-    keep_cols = {"input_ids", "attention_mask", "labels", "num_choices"} | set(keep_extra)
-    return ds2.remove_columns([c for c in ds2.column_names if c not in keep_cols])
+def load_obqa_train_val() -> tuple[Dataset, Dataset]:
+    train_raw, val_raw, _ = load_task_dataset(TASK_NAME)
+    train_raw = assign_random_slice_ids(train_raw, NUM_SLICES, seed=SLICE_PARTITION_SEED)
+    return train_raw, val_raw
 
 
 @torch.no_grad()
@@ -488,7 +352,6 @@ def eval_next_token(
         labels = batch["labels"].to(device, non_blocking=True)
         bsz = input_ids.size(0)
         cand_logits = compute_choice_logits(model, input_ids, attention_mask, amp_dtype)
-        cand_logits = _mask_invalid_choices(cand_logits, batch["num_choices"])
 
         total_nll += float(loss_fct(cand_logits, labels).item())
         probs = torch.softmax(cand_logits.float(), dim=-1)
@@ -562,7 +425,6 @@ def train_map(
             labels = batch["labels"].to(device, non_blocking=True)
             bsz = input_ids.size(0)
             cand_logits = compute_choice_logits(model, input_ids, attention_mask, amp_dtype)
-            cand_logits = _mask_invalid_choices(cand_logits, batch["num_choices"])
 
             loss_sum = ce_sum(cand_logits, labels)
             loss = (loss_sum / bsz) / GRAD_ACCUM
@@ -587,12 +449,7 @@ def train_map(
             model.save_pretrained(ckpt_dir)
 
         if (step % EVAL_EVERY == 0) or (step == MAX_STEPS):
-            m = eval_next_token(
-                model,
-                eval_loader,
-                device,
-                amp_dtype,
-            )
+            m = eval_next_token(model, eval_loader, device, amp_dtype)
             print(f"[Eval] step={step} NLL={m['nll']:.4f} ACC={100*m['acc']:.2f}% ECE={100*m['ece']:.2f}%")
             running_loss = 0.0
             running_cnt = 0
@@ -619,7 +476,8 @@ def run_one(seed: int, train_raw: Dataset, eval_raw: Dataset) -> Dict[str, float
         amp_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
     else:
         amp_dtype = torch.float32
-    print("[ScienceQA scoring] left-padded 2/3/4-choice last-token classification over A-D with masking")
+
+    print("[OBQA scoring] left-padded 4-choice last-token classification over A-D")
     print(f"[Source Eval Split] {SOURCE_EVAL_SPLIT}")
     print(
         f"[Batch Config] micro_bsz={MICRO_BSZ} grad_accum={GRAD_ACCUM} "
@@ -661,9 +519,8 @@ def run_one(seed: int, train_raw: Dataset, eval_raw: Dataset) -> Dict[str, float
     if USE_GRADIENT_CHECKPOINTING:
         enable_gradient_checkpointing(model)
 
-    train_ordered = order_train_by_grade(train_raw, seed)
-    train_proc = preprocess_scienceqa(train_ordered, tokenizer, MAX_SEQ_LEN, keep_slice_id=True)
-    eval_proc = preprocess_scienceqa(eval_raw, tokenizer, MAX_SEQ_LEN, keep_slice_id=False)
+    train_proc = preprocess_task(TASK_NAME, train_raw, tokenizer, MAX_SEQ_LEN, pad_to_max_length=False)
+    eval_proc = preprocess_task(TASK_NAME, eval_raw, tokenizer, MAX_SEQ_LEN, pad_to_max_length=False)
     print(f"[Processed] train={len(train_proc)} eval={len(eval_proc)}")
 
     pin_memory = (device.type == "cuda")
@@ -671,11 +528,14 @@ def run_one(seed: int, train_raw: Dataset, eval_raw: Dataset) -> Dict[str, float
         tokenizer=tokenizer,
         pad_to_multiple_of=(8 if device.type == "cuda" else None),
     )
+    train_generator = torch.Generator()
+    train_generator.manual_seed(seed)
 
     train_loader = DataLoader(
         train_proc,
         batch_size=MICRO_BSZ,
-        shuffle=False,
+        shuffle=True,
+        generator=train_generator,
         collate_fn=batch_collator,
         drop_last=True,
         num_workers=NUM_WORKERS,
@@ -695,7 +555,7 @@ def run_one(seed: int, train_raw: Dataset, eval_raw: Dataset) -> Dict[str, float
         worker_init_fn=seed_worker,
     )
 
-    candidate_token_ids = get_choice_token_ids(tokenizer, device, MAX_CHOICES)
+    candidate_token_ids = get_choice_token_ids(tokenizer, device, NUM_CLASSES)
     trim_lm_head_to_choice_tokens(model, candidate_token_ids)
     print(f"[Head] trimmed lm_head to {int(candidate_token_ids.numel())} choice logits")
     m_base = eval_next_token(model, eval_loader, device, amp_dtype)
@@ -740,9 +600,9 @@ def run_one(seed: int, train_raw: Dataset, eval_raw: Dataset) -> Dict[str, float
 
 
 def main() -> None:
-    train_raw, eval_raw = load_scienceqa_train_val()
-    _print_grade_summary("Train Raw", train_raw)
-    _print_grade_summary("Eval Raw", eval_raw)
+    train_raw, eval_raw = load_obqa_train_val()
+    _print_split_summary("Train Raw", train_raw)
+    _print_split_summary("Eval Raw", eval_raw)
     save_kfac_balanced_dataset(train_raw)
 
     summary = []

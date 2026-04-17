@@ -26,9 +26,6 @@ from peft.config import PeftConfig
 from peft.tuners.lora import LoraLayer, Linear
 
 
-torch.autograd.set_detect_anomaly(True)
-
-
 
 
 
@@ -1329,7 +1326,16 @@ class clora(WrapperBaseeceprf):
 
         eval_loaders = getattr(self, "eval_loaders", None) or {eval_task_name: self.test_loader}
         eval_split_by_task = getattr(self, "eval_split_by_task", None) or {eval_task_name: eval_split_name}
-        for task_name, loader in eval_loaders.items():
+        eval_tasks = list(getattr(self, "eval_tasks", None) or list(eval_loaders.keys()))
+        dataset_obj = getattr(self, "dataset_obj", None)
+        for task_name in eval_tasks:
+            loader = eval_loaders.get(task_name)
+            if loader is None:
+                if dataset_obj is None or not hasattr(dataset_obj, "get_eval_loader_for_task"):
+                    raise RuntimeError(f"Missing eval loader for task '{task_name}'")
+                raw_loader = dataset_obj.get_eval_loader_for_task(task_name)
+                loader = self.accelerator.prepare(raw_loader)
+                self.eval_loaders[task_name] = loader
             split_name = str(eval_split_by_task.get(task_name, "ood"))
             task_eval_tag = f"{task_name}({split_name})"
             task_key = re.sub(r"[^0-9A-Za-z_]+", "_", str(task_name)).strip("_") or "eval"
@@ -1420,6 +1426,7 @@ class clora(WrapperBaseeceprf):
             self.test_loader = test_loader
             self.eval_loaders = {}
             self.eval_split_by_task = {}
+            self.eval_tasks = list(getattr(dataset, "eval_tasks", []) or [source_task])
             if raw_eval_loaders:
                 if source_task in raw_eval_loaders:
                     self.eval_loaders[source_task] = self.test_loader
@@ -1448,6 +1455,7 @@ class clora(WrapperBaseeceprf):
                 self.eval_split_by_task[eval_task_name] = str(
                     getattr(dataset, "eval_split_name", getattr(dataset, "source_eval_split_name", "validation"))
                 )
+                self.eval_tasks = [eval_task_name]
 
             if bool(getattr(self.args, "bayes_datasetrescaling", False)):
                 self.M = int(

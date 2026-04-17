@@ -177,6 +177,7 @@ class BenchmarkMCDataset(DatasetBase):
         self.eval_tasks: List[str] = []
         self.eval_loaders: Dict[str, DataLoader] = {}
         self.eval_split_name_by_task: Dict[str, str] = {}
+        self._lazy_eval_loaders: Dict[str, DataLoader] = {}
         self.eval_task_name = self.source_task
         self.eval_split_name = "validation"
         self.train_eval_split_name = "validation"
@@ -225,6 +226,34 @@ class BenchmarkMCDataset(DatasetBase):
             num_workers=0,
         )
 
+    def get_eval_loader_for_task(self, eval_task: str) -> DataLoader:
+        eval_task = str(eval_task)
+        if eval_task == self.source_task:
+            return self.test_dataloader
+        if eval_task in self._lazy_eval_loaders:
+            return self._lazy_eval_loaders[eval_task]
+
+        eval_num_labels = int(ceu.get_task_num_classes(eval_task))
+        if eval_num_labels != self.num_labels:
+            raise ValueError(
+                f"Eval task '{eval_task}' has {eval_num_labels} classes, "
+                f"but source task '{self.source_task}' has {self.num_labels} classes."
+            )
+
+        print(f"[benchmark_mcdataset] lazy loading eval task={eval_task}")
+        eval_raw = ceu.load_eval_dataset(eval_task)
+        eval_proc = self._prep(eval_task, eval_raw)
+        eval_batch_size = int(getattr(self.args, "eval_batch_size", 48))
+        loader = self._loader(
+            eval_proc,
+            eval_batch_size,
+            drop_last=False,
+            sort_by_len=True,
+        )
+        self._lazy_eval_loaders[eval_task] = loader
+        self.eval_split_name_by_task[eval_task] = "ood"
+        return loader
+
     def get_loaders(self):
         train_raw, _, _ = ceu.load_task_dataset(self.source_task)
         if self.source_task == getattr(ceu, "SCIENCEQA_CURRIC_TASK_NAME", "scienceqa_closedchoice_grade2_11"):
@@ -264,15 +293,6 @@ class BenchmarkMCDataset(DatasetBase):
                 self.eval_loaders[eval_task] = self.test_dataloader
                 self.eval_split_name_by_task[eval_task] = source_eval_name
                 continue
-
-            eval_raw = ceu.load_eval_dataset(eval_task)
-            eval_proc = self._prep(eval_task, eval_raw)
-            self.eval_loaders[eval_task] = self._loader(
-                eval_proc,
-                eval_batch_size,
-                drop_last=False,
-                sort_by_len=True,
-            )
             self.eval_split_name_by_task[eval_task] = "ood"
 
         primary_eval_task = eval_tasks[0] if eval_tasks else self.source_task
