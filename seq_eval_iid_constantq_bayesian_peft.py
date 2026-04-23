@@ -1,23 +1,29 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Optional, Sequence
+from contextlib import contextmanager, nullcontext
+from typing import Dict, Iterable, List, Tuple, Optional, Sequence
+import inspect
 import os
 import random
 import math
 import time
 import argparse
 import gc
+import sys
+import zlib
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
+import datasets as hf_datasets
 from datasets import load_from_disk, Dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from peft import PeftConfig, PeftModel
+from peft import PeftConfig, PeftModel, get_peft_model, set_peft_model_state_dict
+from tqdm import tqdm
 
-from kfac import calculate_kronecker_factors
+from laplace.curvature.asdl import AsdlGGN
 from lssm_ffbs_obs import kalman_filter, lag_one_smoothed_covariances, rts_smoother
 from seq_lora_subspace_obs import (
     build_global_kronecker_eigenspace,
@@ -42,11 +48,11 @@ Tensor = torch.Tensor
 # =========================
 
 SEED = 0
-TRUST_REMOTE_CODE = True
+TRUST_REMOTE_CODE = False
 
 MAX_SEQ_LEN = 300
 EVAL_BSZ = 48
-KFAC_BSZ = 8
+KFAC_BSZ = 4
 
 # KFAC / train-slice loaders remain conservative
 NUM_WORKERS = 0
@@ -57,9 +63,9 @@ EVAL_PREFETCH_FACTOR = 4
 
 N_KFAC = 8
 LR_THRESHOLD = 256
-MAX_KFAC_SAMPLES_PER_SLICE = 2048
+MAX_KFAC_SAMPLES_PER_SLICE = -1
 
-MU_OBS_SCALE = 1
+MU_OBS_SCALE = 2
 MU_OBS_BATCHES = 32
 S_Q = 1.0
 Q_MODE = "module_constant"
@@ -71,13 +77,19 @@ MC_EVAL_SAMPLES = 32
 ADAPTIVE_Q_WARMSTART_VAR = 1.0
 ADAPTIVE_Q_EIG_FLOOR = 1e-8
 
-POSTERIOR_TAU = 1.0
+POSTERIOR_TAU = 1
 TEMP_BAYES = 1.0
+DISABLE_DROPOUT_DURING_KFAC_MU = False
 
 TOKENIZER_PADDING_SIDE = "left"
+BAYESIAN_PEFT_ADD_EOS = False
+IID_EVAL_SPLIT = "validation"
+BAYESIAN_PEFT_PERTURB_LM_HEAD = True
+HF_DATASETS_CACHE_DIR = os.path.join(os.path.dirname(__file__), ".hf_datasets")
 
 from common_eval_utils import (
     SCIENCEQA_CURRIC_TASK_NAME,
+    SCIENCEQA_GRADE12_TASK_NAME,
     DynamicEvalCollator,
     get_choice_token_ids,
     get_transformer_and_lm_head,
@@ -90,6 +102,22 @@ from common_eval_utils import (
     preprocess_task,
     set_inference_fast as _set_inference_fast,
 )
+from seq_eval_iid import (
+    _assign_random_slice_ids,
+    _get_num_classes_for_protocol,
+    _get_target_token_ids_for_protocol,
+    _is_bayesian_peft_protocol,
+    _load_adapter_checkpoint,
+    _normalize_eval_protocol,
+    _preprocess_task_for_protocol,
+    _remap_bayesian_peft_adapter_keys,
+)
+
+_BAYESIAN_PEFT_ROOT = os.path.join(os.path.dirname(__file__), "bayesian-peft")
+if _BAYESIAN_PEFT_ROOT not in sys.path:
+    sys.path.append(_BAYESIAN_PEFT_ROOT)
+
+from dataset.utils import dsets as bayesian_peft_dsets
 
 
 def _cuda_sync():
@@ -218,6 +246,7 @@ def compute_choice_logits(
     input_ids: Tensor,
     attention_mask: Tensor,
     amp_dtype: torch.dtype,
+    choice_token_ids: Optional[Tensor] = None,
 ) -> Tensor:
     device = input_ids.device
     transformer, lm_head = get_transformer_and_lm_head(model)
@@ -229,12 +258,36 @@ def compute_choice_logits(
             return_dict=True,
         )
         logits = lm_head(out.last_hidden_state[:, -1, :])
+        if choice_token_ids is not None and int(torch.max(choice_token_ids).item()) < logits.size(-1):
+            logits = logits.index_select(-1, choice_token_ids)
     return logits.to(torch.float32)
 
 
 def _resolve_bayes_module_names(factors: Dict[str, Tuple[Tensor, Tensor]]) -> List[str]:
     return sorted([name for name in factors.keys() if "lora_A" in name])
 
+
+def _filter_bayes_module_names(
+    module_names: List[str],
+    *,
+    eval_protocol: str,
+    perturb_lm_head: bool,
+) -> List[str]:
+    if not _is_bayesian_peft_protocol(eval_protocol):
+        return module_names
+    if perturb_lm_head:
+        return module_names
+    filtered = [name for name in module_names if ".lm_head." not in name]
+    if not filtered:
+        raise RuntimeError(
+            "All Bayesian modules were filtered out after disabling lm_head posterior perturbation."
+        )
+    removed = len(module_names) - len(filtered)
+    print(
+        f"[Posterior] Keeping {len(filtered)} Bayesian modules after excluding "
+        f"{removed} lm_head module(s) from posterior perturbation."
+    )
+    return filtered
 
 def _ensure_slice_ids_for_seq(task: str, train_raw: Dataset) -> Dataset:
     if "slice_id" in train_raw.column_names:
@@ -267,6 +320,20 @@ class _StageTimer:
         print(f"[PEAK] {self.tag}: alloc={_peak_alloc_gb():.2f} GB  reserved={_peak_reserved_gb():.2f} GB")
 
 
+@contextmanager
+def _temporarily_disable_dropout_modules(model: nn.Module):
+    touched: List[Tuple[nn.Module, bool]] = []
+    for module in model.modules():
+        if isinstance(module, nn.Dropout):
+            touched.append((module, bool(module.training)))
+            module.train(False)
+    try:
+        yield
+    finally:
+        for module, was_training in touched:
+            module.train(was_training)
+
+
 def _parse_eval_tasks(spec: str, default_task: str) -> List[str]:
     if not spec or not spec.strip():
         return [default_task]
@@ -293,29 +360,377 @@ def _parse_eval_tasks(spec: str, default_task: str) -> List[str]:
             out.append(task)
     return out
 
+
+def _bayesian_peft_dataset_name(task: str) -> Optional[str]:
+    mapping = {
+        "wgs": "winogrande_s",
+        "wgm": "winogrande_m",
+        "boolq": "boolq",
+        "obqa": "obqa",
+        "arc-e": "ARC-Easy",
+        "arc-c": "ARC-Challenge",
+    }
+    return mapping.get(task)
+
+
+def _uses_direct_bayesian_peft_data(task: str, eval_protocol: str) -> bool:
+    return _is_bayesian_peft_protocol(eval_protocol) and _bayesian_peft_dataset_name(task) is not None
+
+
+def _build_bayesian_peft_task_dataset(
+    tokenizer,
+    task: str,
+    *,
+    add_space: bool,
+    max_seq_len: int,
+):
+    dataset_name = _bayesian_peft_dataset_name(task)
+    if dataset_name is None:
+        raise ValueError(f"Task '{task}' does not have a direct bayesian-peft dataset wrapper.")
+    if dataset_name.startswith("winogrande"):
+        return bayesian_peft_dsets.winogrande(
+            tokenizer,
+            add_space=add_space,
+            name=dataset_name,
+            max_seq_len=max_seq_len,
+        )
+    if dataset_name.startswith("ARC"):
+        return bayesian_peft_dsets.arc(
+            tokenizer,
+            add_space=add_space,
+            name=dataset_name,
+            max_seq_len=max_seq_len,
+        )
+    if dataset_name == "obqa":
+        return bayesian_peft_dsets.obqa(
+            tokenizer,
+            add_space=add_space,
+            max_seq_len=max_seq_len,
+        )
+    if dataset_name == "boolq":
+        return bayesian_peft_dsets.boolq(
+            tokenizer,
+            add_space=add_space,
+            max_seq_len=max_seq_len,
+        )
+    raise ValueError(f"Unhandled direct bayesian-peft dataset name: {dataset_name}")
+
+
+class _BayesianPeftCLMCollator:
+    def __init__(self, task_dataset):
+        self.task_dataset = task_dataset
+
+    def __call__(self, batch):
+        prompts, classes, _targets = self.task_dataset.clm_collate_fn(batch)
+        return {
+            "input_ids": prompts["input_ids"],
+            "attention_mask": prompts["attention_mask"],
+            "labels": classes.to(dtype=torch.long),
+        }
+
+
+def _make_direct_bayesian_peft_loader(
+    raw_dataset,
+    *,
+    collate_fn,
+    batch_size: int,
+    shuffle: bool,
+    drop_last: bool,
+    num_workers: int,
+    pin_memory: bool,
+    prefetch_factor: int,
+):
+    kwargs = {
+        "batch_size": batch_size,
+        "shuffle": shuffle,
+        "drop_last": drop_last,
+        "collate_fn": collate_fn,
+        "num_workers": num_workers,
+        "pin_memory": pin_memory,
+    }
+    if num_workers > 0:
+        kwargs["persistent_workers"] = True
+        kwargs["prefetch_factor"] = prefetch_factor
+    return DataLoader(raw_dataset, **kwargs)
+
 # =========================
 # KFAC forward
 # =========================
 
-def forward_call_for_kfac_factory(amp_dtype: torch.dtype):
+def forward_call_for_kfac_factory(
+    amp_dtype: torch.dtype,
+    choice_token_ids: Tensor,
+    *,
+    apply_choice_mask: bool,
+):
     def _forward_call(model: nn.Module, batch: Dict[str, Tensor]) -> Tensor:
         device = next(model.parameters()).device
         input_ids = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
         num_choices = batch.get("num_choices")
 
-        import kfac as kfac_mod
-        kfac_mod._CURRENT_LAST_IDX = _left_padded_last_idx(input_ids)
-
         logits = compute_choice_logits(
             model=model,
             input_ids=input_ids,
             attention_mask=attention_mask,
             amp_dtype=amp_dtype,
+            choice_token_ids=choice_token_ids,
         )
-        return _mask_invalid_choices(logits, num_choices)
+        if apply_choice_mask:
+            return _mask_invalid_choices(logits, num_choices)
+        return logits
 
     return _forward_call
+
+
+class _AsdlForwardWrapper(nn.Module):
+    """Expose Laplace-style choice-logit forward as an nn.Module for ASDL."""
+
+    def __init__(self, peft_model: nn.Module, forward_call):
+        super().__init__()
+        self.peft_model = peft_model
+        closure = inspect.getclosurevars(forward_call).nonlocals
+        self.amp_dtype = closure.get("amp_dtype", torch.float16)
+        self.choice_token_ids = closure.get("choice_token_ids")
+        self.apply_choice_mask = bool(closure.get("apply_choice_mask", False))
+
+    @property
+    def device(self) -> torch.device:
+        return next(self.peft_model.parameters()).device
+
+    def forward(self, **batch) -> Tensor:
+        input_ids = batch["input_ids"].to(self.device, non_blocking=True)
+        attention_mask = batch["attention_mask"].to(self.device, non_blocking=True)
+        num_choices = batch.get("num_choices")
+
+        with torch.autocast(
+            device_type=self.device.type,
+            dtype=self.amp_dtype,
+            enabled=(self.device.type == "cuda"),
+        ):
+            out = self.peft_model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                use_cache=False,
+                return_dict=True,
+            )
+            logits = out.logits[:, -1, :]
+            if self.choice_token_ids is not None and int(torch.max(self.choice_token_ids).item()) < logits.size(-1):
+                logits = logits.index_select(-1, self.choice_token_ids.to(self.device))
+
+        logits = logits.to(torch.float32)
+        if self.apply_choice_mask:
+            logits = _mask_invalid_choices(logits, num_choices)
+        return logits
+
+
+@contextmanager
+def _temporarily_select_lora_a_weights(model: nn.Module):
+    saved = []
+    for name, param in model.named_parameters():
+        saved.append((param, bool(param.requires_grad)))
+        param.requires_grad = bool("lora_A." in name and name.endswith(".weight"))
+    try:
+        yield
+    finally:
+        for param, req_grad in saved:
+            param.requires_grad = req_grad
+
+
+def _has_trainable_local_weight(module: nn.Module) -> Tuple[bool, bool]:
+    local_params = {
+        name: param
+        for name, param in module.named_parameters(recurse=False)
+        if param.requires_grad
+    }
+    if not local_params:
+        return False, False
+
+    unsupported = [name for name in local_params if name not in {"weight", "bias"}]
+    if unsupported:
+        raise ValueError(
+            f"Unsupported trainable local parameters for ASDL Kron extraction in "
+            f"{module.__class__.__name__}: {unsupported}"
+        )
+    return ("weight" in local_params), ("bias" in local_params)
+
+
+def _iter_weight_block_module_names(wrapper: nn.Module) -> Iterable[str]:
+    for name, module in wrapper.named_modules():
+        if not name:
+            continue
+        has_weight, has_bias = _has_trainable_local_weight(module)
+        if not has_weight and not has_bias:
+            continue
+
+        normalized_name = name
+        if normalized_name.startswith("peft_model."):
+            normalized_name = normalized_name[len("peft_model."):]
+
+        if has_weight:
+            yield normalized_name
+        if has_bias:
+            raise RuntimeError(
+                f"Unexpected trainable bias block in ASDL Kron extraction for module {normalized_name}. "
+                "Seq-LoRA currently expects weight-only LoRA-A modules."
+            )
+
+
+def _symmetrize(matrix: Tensor) -> Tensor:
+    return 0.5 * (matrix + matrix.T)
+
+
+def _randomized_psd_low_rank_factor(
+    matrix: Tensor,
+    *,
+    target_rank: int,
+    tag: str,
+    oversample: int = 8,
+    n_power_iters: int = 2,
+) -> Tensor:
+    """Return F such that matrix ~= F F^T using randomized subspace iteration."""
+    if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError(f"Expected a square PSD matrix, got shape={tuple(matrix.shape)}")
+
+    side = int(matrix.shape[0])
+    rank = min(int(target_rank), side)
+    if rank <= 0:
+        raise ValueError(f"target_rank must be positive, got {target_rank}")
+    if rank >= side:
+        return _symmetrize(matrix)
+
+    sketch_dim = min(side, rank + max(int(oversample), 4))
+    work_dtype = matrix.dtype if matrix.dtype in {torch.float32, torch.float64} else torch.float32
+    work_matrix = _symmetrize(matrix.detach().to(dtype=work_dtype))
+
+    base_seed = int(torch.initial_seed())
+    tag_seed = int(zlib.crc32(tag.encode("utf-8")))
+    omega_gen = torch.Generator(device="cpu")
+    omega_gen.manual_seed((base_seed + tag_seed) % (2 ** 63 - 1))
+    omega = torch.randn((side, sketch_dim), generator=omega_gen, dtype=work_dtype).to(
+        device=work_matrix.device,
+        non_blocking=True,
+    )
+
+    Q = torch.linalg.qr(work_matrix @ omega, mode="reduced").Q
+    for _ in range(max(int(n_power_iters), 0)):
+        Q = torch.linalg.qr(work_matrix @ Q, mode="reduced").Q
+
+    B = _symmetrize(Q.T @ work_matrix @ Q)
+    evals, evecs = torch.linalg.eigh(B)
+    evals = evals[-rank:].clamp_min(0.0)
+    evecs = evecs[:, -rank:]
+    U = Q @ evecs
+
+    if evals.numel() == 0:
+        return torch.zeros((side, 0), device=matrix.device, dtype=work_dtype)
+
+    positive = evals > 0
+    if not torch.any(positive):
+        return torch.zeros((side, 1), device=matrix.device, dtype=work_dtype)
+
+    evals = evals[positive]
+    U = U[:, positive]
+    factor = U * torch.sqrt(evals).unsqueeze(0)
+    return factor.to(device=matrix.device, dtype=work_dtype).contiguous()
+
+
+def _compress_asdl_psd_factor(
+    factor: Tensor,
+    *,
+    n_kfac: int | None,
+    lr_threshold: int,
+    tag: str,
+) -> Tensor:
+    if factor.ndim != 2:
+        raise ValueError(f"Expected a 2D ASDL factor, got shape={tuple(factor.shape)}")
+
+    side = int(factor.shape[0])
+    if factor.shape[0] != factor.shape[1]:
+        return factor.detach()
+    if n_kfac is None or side < int(lr_threshold) or int(n_kfac) >= side:
+        return _symmetrize(factor.detach())
+
+    return _randomized_psd_low_rank_factor(
+        factor,
+        target_rank=int(n_kfac),
+        tag=tag,
+    )
+
+
+def calculate_kronecker_factors(
+    model: nn.Module,
+    forward_call,
+    loader: DataLoader,
+    n_kfac: int | None = None,
+    lr_threshold: int = 512,
+    target_module_keywords: list[str] | None = None,
+    exclude_bias: bool = False,
+    use_tqdm: bool = False,
+) -> Dict[str, Tuple[Tensor, Tensor]]:
+    """ASDL Kron extraction over the full wrapper graph."""
+    del target_module_keywords, exclude_bias
+
+    if not hasattr(loader, "dataset"):
+        raise ValueError("ASDL Kron extraction requires loader.dataset to infer N.")
+
+    device = next(model.parameters()).device
+    N = len(loader.dataset)
+    if N <= 0:
+        raise ValueError("ASDL Kron extraction requires a non-empty loader.dataset.")
+
+    wrapper = _AsdlForwardWrapper(model, forward_call).to(device)
+    wrapper.eval()
+
+    with _temporarily_select_lora_a_weights(model):
+        module_names = list(_iter_weight_block_module_names(wrapper))
+        if not module_names:
+            raise RuntimeError("No trainable LoRA-A weight blocks found for ASDL Kron extraction.")
+
+        backend = AsdlGGN(wrapper, likelihood="classification", last_layer=False)
+        kron_total = None
+
+        batch_iter = tqdm(loader, disable=not use_tqdm, file=sys.stdout)
+        for batch in batch_iter:
+            batch = {
+                key: (value.to(device) if isinstance(value, torch.Tensor) else value)
+                for key, value in batch.items()
+            }
+            wrapper.zero_grad(set_to_none=True)
+            loss_batch, kron_batch, _ = backend.kron(batch, N=N)
+            kron_total = kron_batch if kron_total is None else (kron_total + kron_batch)
+            del loss_batch, kron_batch
+
+        if kron_total is None:
+            raise RuntimeError("ASDL Kron extraction produced no factors.")
+        if len(kron_total.kfacs) != len(module_names):
+            raise RuntimeError(
+                f"ASDL Kron block count mismatch: got {len(kron_total.kfacs)} blocks "
+                f"for {len(module_names)} LoRA-A modules."
+            )
+
+        factors: Dict[str, Tuple[Tensor, Tensor]] = {}
+        for module_name, block in zip(module_names, kron_total.kfacs):
+            if len(block) != 2:
+                raise RuntimeError(
+                    f"Expected a 2-factor Kron block for {module_name}, got {len(block)} factors."
+                )
+            factors[module_name] = (
+                _compress_asdl_psd_factor(
+                    block[1],
+                    n_kfac=n_kfac,
+                    lr_threshold=lr_threshold,
+                    tag=f"{module_name}:H",
+                ),
+                _compress_asdl_psd_factor(
+                    block[0],
+                    n_kfac=n_kfac,
+                    lr_threshold=lr_threshold,
+                    tag=f"{module_name}:G",
+                ),
+            )
+
+        return factors
 
 # =========================
 # μ-observation & Math
@@ -516,16 +931,18 @@ def estimate_mu_global_list_from_slice_grads(
         if n_seen == 0:
             raise RuntimeError(f"[mu-obs] slice {t} loader produced no batches")
 
-        mu_parts = [
-            solve_xhat_from_grad(
+        mu_parts: List[Tensor] = []
+        for mi, name in enumerate(module_names):
+            g_x_avg = g_x_parts[mi] / float(n_seen)
+            mu_part = solve_xhat_from_grad(
                 module_R_lists[name][t].to(device=device, dtype=dtype),
-                g_x_parts[mi] / float(n_seen),
+                g_x_avg,
             )
-            for mi, name in enumerate(module_names)
-        ]
+            mu_parts.append(mu_part)
         mu_global_list.append(torch.cat(mu_parts, dim=0).cpu())
 
     return mu_global_list
+
 
 def _move_subspace_info(
     subspace_info: Dict[str, Tensor],
@@ -542,7 +959,6 @@ def _move_subspace_info(
         else:
             moved[key] = value
     return moved
-
 
 def _report_module_constant_q_results(module_stats: Dict[str, Dict[str, float]], s_q: float) -> None:
     if not module_stats:
@@ -596,7 +1012,6 @@ def _resolve_lora_parent_and_adapter(module_path: str) -> Tuple[str, str]:
     if len(parts) < 3 or parts[-2] != "lora_A":
         raise RuntimeError(f"Unexpected LoRA-A module path: {module_path}")
     return ".".join(parts[:-2]), parts[-1]
-
 
 def build_loraA_cache(model: nn.Module, module_specs: List[Dict], device: torch.device) -> List[_LoraACache]:
     caches: List[_LoraACache] = []
@@ -662,6 +1077,7 @@ def eval_bayes_fast_restricted_4way_probmean(
     device: torch.device,
     amp_dtype: torch.dtype,
     num_classes: int,
+    choice_token_ids: Tensor,
     lora_cache: List[_LoraACache],
     x_samples_T: Tensor,
     posterior_scale_tau: float = 0.8,
@@ -669,6 +1085,7 @@ def eval_bayes_fast_restricted_4way_probmean(
     max_mc_samples: int = 32,
     mc_eval_chunk: int = 0,
     progress_desc: Optional[str] = None,
+    apply_choice_mask: bool = True,
 ) -> Dict[str, float]:
     model.eval()
     _set_inference_fast(model)
@@ -707,8 +1124,10 @@ def eval_bayes_fast_restricted_4way_probmean(
             input_ids=ids,
             attention_mask=attn,
             amp_dtype=amp_dtype,
+            choice_token_ids=choice_token_ids,
         )
-        logits_map = _mask_invalid_choices(logits_map, num_choices)
+        if apply_choice_mask:
+            logits_map = _mask_invalid_choices(logits_map, num_choices)
         probs_map_batch = torch.softmax(logits_map, dim=-1)
 
         probs_acc_batch = torch.zeros((bsz, num_classes), device=device, dtype=torch.float32)
@@ -729,8 +1148,10 @@ def eval_bayes_fast_restricted_4way_probmean(
                     input_ids=ids,
                     attention_mask=attn,
                     amp_dtype=amp_dtype,
+                    choice_token_ids=choice_token_ids,
                 )
-                logits = _mask_invalid_choices(logits, num_choices)
+                if apply_choice_mask:
+                    logits = _mask_invalid_choices(logits, num_choices)
                 probs_acc_batch.add_(torch.softmax(logits, dim=-1))
 
                 torch._foreach_sub_(weight_tensors, deltas_s)
@@ -781,6 +1202,8 @@ def eval_bayes_fast_restricted_4way_probmean(
         "time_bayes_sec": float(bayes_extra_time),
     }
     return metrics
+
+
 # =========================
 # Main
 # =========================
@@ -816,6 +1239,15 @@ def main():
     parser.add_argument("--mu_obs_scale", type=float, default=MU_OBS_SCALE, help="Scale factor applied to mu observations.")
     parser.add_argument("--mu_obs_batches", type=int, default=MU_OBS_BATCHES, help="Number of batches per slice used for mu observations.")
     parser.add_argument(
+        "--disable_dropout_during_kfac_mu",
+        type=_parse_bool,
+        default=DISABLE_DROPOUT_DURING_KFAC_MU,
+        help=(
+            "Temporarily disable nn.Dropout modules while building KFAC and mu observations. "
+            "Useful to isolate train-mode dropout effects."
+        ),
+    )
+    parser.add_argument(
         "--task",
         type=str,
         required=True,
@@ -831,6 +1263,12 @@ def main():
             "scienceqa_closedchoice_grade2_11, the script will read the task "
             "training split directly and use grade-based slice ids."
         ),
+    )
+    parser.add_argument(
+        "--random_num_slices",
+        type=int,
+        default=0,
+        help="If > 0 and --slices_dir is omitted, assign balanced random slice ids to the source-task training split.",
     )
     parser.add_argument(
         "--map_dir",
@@ -893,6 +1331,51 @@ def main():
         default=0,
         help="Forecast horizon h. 0 uses x_{T|T}; 1 uses one-step-ahead x_{T+1|T}.",
     )
+    parser.add_argument(
+        "--eval_protocol",
+        type=str,
+        default="bayesian_peft",
+        choices=["default", "bayesian_peft"],
+        help="Evaluation protocol. bayesian_peft matches the original bayesian-peft prompt/target-id setup.",
+    )
+    parser.add_argument(
+        "--bayesian_peft_add_space",
+        type=_parse_bool,
+        default=False,
+        help="Match bayesian-peft's add_space flag when eval_protocol=bayesian_peft.",
+    )
+    parser.add_argument(
+        "--bayesian_peft_add_eos",
+        type=_parse_bool,
+        default=BAYESIAN_PEFT_ADD_EOS,
+        help="Match bayesian-peft tokenizer.add_eos_token handling when eval_protocol=bayesian_peft.",
+    )
+    parser.add_argument(
+        "--bayesian_peft_perturb_lm_head",
+        type=_parse_bool,
+        default=BAYESIAN_PEFT_PERTURB_LM_HEAD,
+        help=(
+            "Whether Seq posterior sampling should perturb lm_head LoRA-A when "
+            "eval_protocol=bayesian_peft. Defaults to true to match the full-vocab tfb/blob behavior."
+        ),
+    )
+    parser.add_argument(
+        "--iid_eval_split",
+        type=str,
+        default=IID_EVAL_SPLIT,
+        choices=["validation", "test"],
+        help="Split used for source-task IID evaluation when eval_protocol=bayesian_peft.",
+    )
+    parser.add_argument(
+        "--keep_full_vocab_lm_head",
+        type=_parse_bool,
+        default=False,
+        help=(
+            "Keep the checkpoint's full-vocab lm_head and slice choice-token logits dynamically. "
+            "Useful for local full-vocab checkpoints trained under the default prompt protocol "
+            "(for example train_closedchoice_llama2_7b_lora_map_leftpad.py outputs)."
+        ),
+    )
     args = parser.parse_args()
 
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -904,10 +1387,27 @@ def main():
 
     torch.manual_seed(args.seed)
     random.seed(args.seed)
+    os.makedirs(HF_DATASETS_CACHE_DIR, exist_ok=True)
+    os.environ["HF_DATASETS_CACHE"] = HF_DATASETS_CACHE_DIR
+    try:
+        hf_datasets.config.HF_DATASETS_CACHE = HF_DATASETS_CACHE_DIR
+    except Exception:
+        pass
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cpu_device = torch.device("cpu")
     print("Using device:", device)
+    eval_protocol = _normalize_eval_protocol(args.eval_protocol)
+    apply_choice_mask = not _is_bayesian_peft_protocol(eval_protocol)
+    keep_full_vocab_lm_head = bool(args.keep_full_vocab_lm_head) or _is_bayesian_peft_protocol(eval_protocol)
+    print(f"[Protocol] eval_protocol={eval_protocol}")
+    print(
+        "[Curvature backend] Using ASDL Kron on the full wrapper graph "
+        "with randomized PSD low-rank compression for large blocks."
+    )
+    print(
+        f"[KFAC] disable_dropout_during_kfac_mu={bool(args.disable_dropout_during_kfac_mu)}"
+    )
 
     amp_dtype = torch.bfloat16 if (device.type == "cuda" and torch.cuda.is_bf16_supported()) else torch.float16
     pin_memory = (device.type == "cuda")
@@ -916,32 +1416,75 @@ def main():
     base_name = peft_cfg.base_model_name_or_path
     print(f"\n[Load] base_model = {base_name}\n[Load] adapter    = {args.map_dir}")
 
+    use_direct_source_bayesian_peft = _uses_direct_bayesian_peft_data(args.task, eval_protocol)
     tokenizer = AutoTokenizer.from_pretrained(
         base_name,
         trust_remote_code=bool(args.trust_remote_code),
         use_fast=True,
+        local_files_only=True,
     )
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.bos_token if tokenizer.bos_token is not None else tokenizer.eos_token
     tokenizer.padding_side = args.tokenizer_padding_side
+    if use_direct_source_bayesian_peft:
+        tokenizer.pad_token = tokenizer.bos_token if tokenizer.bos_token is not None else tokenizer.eos_token
+    elif tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.bos_token if tokenizer.bos_token is not None else tokenizer.eos_token
+    if _is_bayesian_peft_protocol(eval_protocol) and hasattr(tokenizer, "add_eos_token"):
+        tokenizer.add_eos_token = bool(args.bayesian_peft_add_eos)
+        print(f"[Protocol] tokenizer.add_eos_token={bool(args.bayesian_peft_add_eos)}")
 
-    num_classes = get_task_num_classes(args.task)
-    choice_token_ids = get_choice_token_ids(tokenizer, device, num_classes)
+    source_bayesian_peft_dataset = None
+    if use_direct_source_bayesian_peft:
+        source_bayesian_peft_dataset = _build_bayesian_peft_task_dataset(
+            tokenizer,
+            args.task,
+            add_space=bool(args.bayesian_peft_add_space),
+            max_seq_len=args.max_seq_len,
+        )
+        num_classes = int(source_bayesian_peft_dataset.n_labels)
+        choice_token_ids = source_bayesian_peft_dataset.target_ids.view(-1).to(device=device, dtype=torch.long)
+        print(f"[Protocol] using direct bayesian-peft dataset wrapper for source task {args.task}")
+    else:
+        num_classes = _get_num_classes_for_protocol(args.task, eval_protocol)
+        choice_token_ids = _get_target_token_ids_for_protocol(
+            tokenizer,
+            task=args.task,
+            protocol=eval_protocol,
+            device=device,
+            add_space=bool(args.bayesian_peft_add_space),
+        )
 
     base_model = AutoModelForCausalLM.from_pretrained(
         base_name,
         trust_remote_code=bool(args.trust_remote_code),
         torch_dtype=(amp_dtype if device.type == "cuda" else None),
         attn_implementation="sdpa",
+        local_files_only=True,
     ).to(device)
     if hasattr(base_model.config, "use_cache"):
         base_model.config.use_cache = False
     if hasattr(base_model, "gradient_checkpointing_disable"):
         base_model.gradient_checkpointing_disable()
-    trim_lm_head_to_choice_tokens(base_model, choice_token_ids)
-    print(f"[Head] trimmed lm_head to {num_classes} choice logits")
-
-    model = PeftModel.from_pretrained(base_model, args.map_dir).to(device)
+    if _is_bayesian_peft_protocol(eval_protocol):
+        print("[Head] keeping full-vocab lm_head (bayesian_peft protocol)")
+        model = get_peft_model(base_model, peft_cfg).to(device)
+        adapter_state = _load_adapter_checkpoint(args.map_dir)
+        adapter_state, num_remapped = _remap_bayesian_peft_adapter_keys(adapter_state)
+        print(f"[Adapter] loaded legacy checkpoint keys={len(adapter_state)} remapped={num_remapped}")
+        incompat = set_peft_model_state_dict(model, adapter_state, adapter_name="default")
+        missing_lora = [k for k in incompat.missing_keys if "lora_" in k]
+        unexpected_lora = [k for k in incompat.unexpected_keys if "lora_" in k]
+        if missing_lora or unexpected_lora:
+            raise RuntimeError(
+                f"LoRA load mismatch for {args.map_dir}: "
+                f"missing_lora={missing_lora[:8]} unexpected_lora={unexpected_lora[:8]}"
+            )
+    elif keep_full_vocab_lm_head:
+        print("[Head] keeping full-vocab lm_head and slicing choice-token logits dynamically")
+        model = PeftModel.from_pretrained(base_model, args.map_dir).to(device)
+    else:
+        trim_lm_head_to_choice_tokens(base_model, choice_token_ids)
+        print(f"[Head] trimmed lm_head to {num_classes} choice logits")
+        model = PeftModel.from_pretrained(base_model, args.map_dir).to(device)
     model.eval()
 
     print("\n[Setup] Casting all LoRA params to float32 for numerical stability...")
@@ -955,53 +1498,97 @@ def main():
         train_raw = ds_slices["train"]
         slice_source = f"slices_dir={args.slices_dir}"
     else:
-        train_raw, _, _ = load_task_dataset(args.task)
-        train_raw = _ensure_slice_ids_for_seq(args.task, train_raw)
-        slice_source = "task_train_split"
-        if args.task == SCIENCEQA_CURRIC_TASK_NAME:
-            print("[Slices] No --slices_dir provided; using ScienceQA train split with grade-based slice ids.")
+        if use_direct_source_bayesian_peft:
+            train_raw = source_bayesian_peft_dataset.dset["train"]
+        else:
+            train_raw, _, _ = load_task_dataset(args.task)
+        if int(args.random_num_slices) > 0:
+            train_raw = _assign_random_slice_ids(train_raw, int(args.random_num_slices), int(args.seed))
+            slice_source = f"task_train_split[random_{int(args.random_num_slices)}_slices_seed_{int(args.seed)}]"
+            print(
+                f"[Slices] No --slices_dir provided; using balanced random slice ids "
+                f"with K={int(args.random_num_slices)} and seed={int(args.seed)}."
+            )
+        else:
+            train_raw = _ensure_slice_ids_for_seq(args.task, train_raw)
+            slice_source = "task_train_split"
+            if args.task == SCIENCEQA_CURRIC_TASK_NAME:
+                print("[Slices] No --slices_dir provided; using ScienceQA train split with grade-based slice ids.")
     print(f"\n[Slices] train={len(train_raw)} source={slice_source} (used for KFAC only)")
 
     # -------------------------
     # Eval set: dynamic padding + length sorting
     # -------------------------
     eval_tasks = _parse_eval_tasks(args.eval_tasks, args.task)
-    eval_task_to_proc: Dict[str, Dataset] = {}
+    eval_task_to_proc: Dict[str, object] = {}
     for eval_task in eval_tasks:
-        eval_num_classes = get_task_num_classes(eval_task)
+        use_direct_eval_bayesian_peft = _uses_direct_bayesian_peft_data(eval_task, eval_protocol)
+        if use_direct_eval_bayesian_peft:
+            eval_task_dataset = _build_bayesian_peft_task_dataset(
+                tokenizer,
+                eval_task,
+                add_space=bool(args.bayesian_peft_add_space),
+                max_seq_len=args.max_seq_len,
+            )
+            eval_num_classes = int(eval_task_dataset.n_labels)
+        else:
+            eval_num_classes = _get_num_classes_for_protocol(eval_task, eval_protocol)
         if eval_num_classes != num_classes:
             raise ValueError(
                 f"Eval task '{eval_task}' has {eval_num_classes} classes, "
                 f"but source task '{args.task}' has {num_classes} classes."
             )
-        eval_raw = load_iid_test_set(eval_task) if eval_task == args.task else load_eval_dataset(eval_task)
-        eval_proc = preprocess_task(
-            eval_task,
-            eval_raw,
-            tokenizer,
-            args.max_seq_len,
-            pad_to_max_length=False,
-        )
-        eval_proc = eval_proc.add_column("seq_len", [len(x) for x in eval_proc["input_ids"]])
-        eval_task_to_proc[eval_task] = eval_proc.sort("seq_len")
+        if use_direct_eval_bayesian_peft:
+            eval_split = str(args.iid_eval_split) if eval_task == args.task else "validation"
+            print(f"[Eval split] task={eval_task} split={eval_split}")
+            eval_task_to_proc[eval_task] = _make_direct_bayesian_peft_loader(
+                eval_task_dataset.dset[eval_split],
+                collate_fn=_BayesianPeftCLMCollator(eval_task_dataset),
+                batch_size=args.eval_bsz,
+                shuffle=False,
+                drop_last=True,
+                num_workers=args.eval_num_workers,
+                pin_memory=pin_memory,
+                prefetch_factor=args.eval_prefetch_factor,
+            )
+        else:
+            eval_raw = load_iid_test_set(eval_task) if eval_task == args.task else load_eval_dataset(eval_task)
+            eval_proc = _preprocess_task_for_protocol(
+                eval_task,
+                eval_raw,
+                tokenizer,
+                args.max_seq_len,
+                protocol=eval_protocol,
+                bayesian_peft_add_space=bool(args.bayesian_peft_add_space),
+                pad_to_max_length=False,
+            )
+            eval_proc = eval_proc.add_column("seq_len", [len(x) for x in eval_proc["input_ids"]])
+            eval_task_to_proc[eval_task] = eval_proc.sort("seq_len")
 
     # -------------------------
     # KFAC/train slices: dynamic padding to reduce wasted compute on long MMLU inputs
     # -------------------------
-    train_proc = preprocess_task(
-        args.task,
-        train_raw,
-        tokenizer,
-        args.max_seq_len,
-        pad_to_max_length=False,
-    )
-    if "slice_id" not in train_proc.column_names:
-        train_proc = train_proc.map(
-            lambda ex, idx: {"slice_id": int(train_raw[idx]["slice_id"])},
-            with_indices=True,
+    direct_bayesian_peft_collator = None
+    train_proc = None
+    if use_direct_source_bayesian_peft:
+        direct_bayesian_peft_collator = _BayesianPeftCLMCollator(source_bayesian_peft_dataset)
+    else:
+        train_proc = _preprocess_task_for_protocol(
+            args.task,
+            train_raw,
+            tokenizer,
+            args.max_seq_len,
+            protocol=eval_protocol,
+            bayesian_peft_add_space=bool(args.bayesian_peft_add_space),
+            pad_to_max_length=False,
         )
-    if "seq_len" not in train_proc.column_names:
-        train_proc = train_proc.add_column("seq_len", [len(x) for x in train_proc["input_ids"]])
+        if "slice_id" not in train_proc.column_names:
+            train_proc = train_proc.map(
+                lambda ex, idx: {"slice_id": int(train_raw[idx]["slice_id"])},
+                with_indices=True,
+            )
+        if "seq_len" not in train_proc.column_names:
+            train_proc = train_proc.add_column("seq_len", [len(x) for x in train_proc["input_ids"]])
 
     slice_ids = sorted(set(int(x) for x in train_raw["slice_id"]))
     T = len(slice_ids)
@@ -1019,6 +1606,35 @@ def main():
         None if int(args.max_kfac_samples_per_slice) < 0 else int(args.max_kfac_samples_per_slice)
     )
     for sid in slice_ids:
+        if use_direct_source_bayesian_peft:
+            slice_indices = [idx for idx, ex in enumerate(train_raw) if int(ex["slice_id"]) == sid]
+            if max_kfac_samples_per_slice is not None and len(slice_indices) > max_kfac_samples_per_slice:
+                rng = random.Random(42)
+                rng.shuffle(slice_indices)
+                slice_indices = slice_indices[:max_kfac_samples_per_slice]
+            eff_batches = len(slice_indices) // args.kfac_bsz
+            eff_samples = eff_batches * args.kfac_bsz
+            total_kfac_samples += eff_samples
+            total_kfac_batches += eff_batches
+            print(
+                f"[KFAC slice] sid={sid} raw={len(slice_indices)} "
+                f"eff_samples={eff_samples} batches={eff_batches}"
+            )
+            ds_loader = Subset(train_raw, slice_indices[:eff_samples])
+            slice_loaders.append(
+                _make_direct_bayesian_peft_loader(
+                    ds_loader,
+                    collate_fn=direct_bayesian_peft_collator,
+                    batch_size=args.kfac_bsz,
+                    shuffle=False,
+                    drop_last=True,
+                    num_workers=args.num_workers,
+                    pin_memory=pin_memory,
+                    prefetch_factor=args.eval_prefetch_factor,
+                )
+            )
+            continue
+
         ds_t = train_proc.filter(lambda ex, sid=sid: int(ex["slice_id"]) == sid)
         if max_kfac_samples_per_slice is not None and len(ds_t) > max_kfac_samples_per_slice:
             ds_t = ds_t.shuffle(seed=42).select(range(max_kfac_samples_per_slice))
@@ -1048,10 +1664,20 @@ def main():
         f"across {total_kfac_batches} batches"
     )
 
-    forward_call_for_kfac = forward_call_for_kfac_factory(amp_dtype)
+    forward_call_for_kfac = forward_call_for_kfac_factory(
+        amp_dtype,
+        choice_token_ids,
+        apply_choice_mask=apply_choice_mask,
+    )
     H_factor_per_module, G_factor_per_module, module_names = {}, {}, None
 
-    with _StageTimer(f"TRAIN-STAGE Seq-LoRA posterior build on {args.task}"):
+    dropout_ctx = (
+        _temporarily_disable_dropout_modules(model)
+        if bool(args.disable_dropout_during_kfac_mu)
+        else nullcontext()
+    )
+
+    with _StageTimer(f"TRAIN-STAGE Seq-LoRA posterior build on {args.task}"), dropout_ctx:
         print("\n=== Running KFAC on seq slices (targets=all LoRA-A modules in adapter) ===")
         for t_idx, loader_t in enumerate(slice_loaders):
             autocast_ctx = (
@@ -1074,6 +1700,11 @@ def main():
 
             if module_names is None:
                 module_names = _resolve_bayes_module_names(factors)
+                module_names = _filter_bayes_module_names(
+                    module_names,
+                    eval_protocol=eval_protocol,
+                    perturb_lm_head=bool(args.bayesian_peft_perturb_lm_head),
+                )
                 print(f"[Seq-LoRA] Resolved Bayesian modules: {len(module_names)}")
                 for name in module_names:
                     print(f"  - {name}")
@@ -1166,8 +1797,9 @@ def main():
             )
             offset += Lm
         L_total = offset
+        lora_cache = build_loraA_cache(model, module_specs, device=device)
 
-        mu_global_list = estimate_mu_global_list_from_slice_grads(
+        mu_global_list_raw = estimate_mu_global_list_from_slice_grads(
             model,
             slice_loaders,
             forward_call_for_kfac,
@@ -1178,7 +1810,7 @@ def main():
             args.mu_obs_batches,
             torch.float64,
         )
-        mu_global_list = [float(args.mu_obs_scale) * mu_t for mu_t in mu_global_list]
+        mu_global_list = [float(args.mu_obs_scale) * mu_t for mu_t in mu_global_list_raw]
 
         print(f"\n=== Kalman Filter Only (module-wise) ===")
         print(f"[Kalman] modules={len(module_specs)} L_total={L_total}")
@@ -1323,11 +1955,9 @@ def main():
             _report_module_constant_q_results(module_constant_q_stats, args.s_q)
         else:
             _report_scalar_constant_q_results(args.s_q)
-        del mu_global_list
+        del mu_global_list, mu_global_list_raw
         x_samples_T = torch.cat(x_sample_parts, dim=1).to(dtype=torch.float32)
         del x_sample_parts
-
-    lora_cache = build_loraA_cache(model, module_specs, device=device)
 
     eval_collator = DynamicEvalCollator(
         tokenizer=tokenizer,
@@ -1346,9 +1976,18 @@ def main():
         eval_loader_kwargs["persistent_workers"] = True
         eval_loader_kwargs["prefetch_factor"] = args.eval_prefetch_factor
 
-    def eval_one(tag: str, proc: Dataset):
-        proc_eval = proc.remove_columns(["seq_len"]) if "seq_len" in proc.column_names else proc
-        loader = DataLoader(proc_eval, **eval_loader_kwargs)
+    effective_posterior_tau = float(args.posterior_tau)
+
+    def eval_one(tag: str, proc_or_loader):
+        if isinstance(proc_or_loader, DataLoader):
+            loader = proc_or_loader
+        else:
+            proc_eval = (
+                proc_or_loader.remove_columns(["seq_len"])
+                if "seq_len" in proc_or_loader.column_names
+                else proc_or_loader
+            )
+            loader = DataLoader(proc_eval, **eval_loader_kwargs)
 
         with _StageTimer(f"INFER Seq-LoRA on {tag}"):
             metrics = eval_bayes_fast_restricted_4way_probmean(
@@ -1357,13 +1996,15 @@ def main():
                 device=device,
                 amp_dtype=amp_dtype,
                 num_classes=num_classes,
+                choice_token_ids=choice_token_ids,
                 lora_cache=lora_cache,
                 x_samples_T=x_samples_T,
-                posterior_scale_tau=args.posterior_tau,
+                posterior_scale_tau=effective_posterior_tau,
                 temp_bayes=args.temp_bayes,
                 max_mc_samples=args.mc_eval_samples,
                 mc_eval_chunk=args.mc_eval_chunk,
                 progress_desc=f"SEQ {tag}",
+                apply_choice_mask=apply_choice_mask,
             )
 
         print(f"\n[{tag}]\n  ===== Bayesian (Seq-LoRA) Only =====")
@@ -1372,6 +2013,14 @@ def main():
         print(f"  ece_bayes: {metrics['ece_bayes']*100:.2f}%")
         print(f"  acc_bayes: {metrics['acc_bayes']*100:.2f}%")
         print(f"  kl_map_to_bayes: {metrics['kl_map_to_bayes']:.6f}")
+        print(f"  posterior_tau_used: {effective_posterior_tau:.8f}")
+        print(
+            "  [bayesian-peft style] "
+            f"val_acc: {metrics['acc_bayes']}, "
+            f"val_ece: {metrics['ece_bayes']}, "
+            f"val_nll: {metrics['nll_bayes']}, "
+            f"val_brier: {metrics['brier_bayes']}"
+        )
         if "past_rate" in metrics:
             print(f"  past_rate: {metrics['past_rate']*100:.2f}%")
             print(f"  future_rate: {metrics['future_rate']*100:.2f}%")
