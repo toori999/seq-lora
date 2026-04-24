@@ -10,8 +10,13 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from peft import PeftConfig, PeftModel
+from peft import PeftConfig, PeftModel, get_peft_model, set_peft_model_state_dict
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+try:
+    from safetensors.torch import load_file as _load_safetensors_file
+except Exception:
+    _load_safetensors_file = None
 
 from common_eval_utils import (
     SCIENCEQA_CURRIC_TASK_NAME,
@@ -30,6 +35,41 @@ SEED = 0
 TRUST_REMOTE_CODE = False
 MAX_SEQ_LEN = 300
 EVAL_BSZ = 256
+
+
+def _load_adapter_checkpoint(adapter_dir: str) -> Dict[str, torch.Tensor]:
+    safetensors_path = os.path.join(adapter_dir, "adapter_model.safetensors")
+    bin_path = os.path.join(adapter_dir, "adapter_model.bin")
+
+    if os.path.exists(safetensors_path):
+        if _load_safetensors_file is None:
+            raise RuntimeError("safetensors is required to load adapter_model.safetensors")
+        return _load_safetensors_file(safetensors_path)
+    if os.path.exists(bin_path):
+        state = torch.load(bin_path, map_location="cpu")
+        if not isinstance(state, dict):
+            raise RuntimeError(f"Unexpected adapter checkpoint object type: {type(state)}")
+        return state
+    raise FileNotFoundError(
+        f"Could not find adapter checkpoint under {adapter_dir}. "
+        "Expected adapter_model.safetensors or adapter_model.bin."
+    )
+
+
+def _remap_legacy_peft_keys(state_dict: Dict[str, torch.Tensor]) -> tuple[Dict[str, torch.Tensor], int]:
+    remapped: Dict[str, torch.Tensor] = {}
+    num_changed = 0
+    old_prefix = "base_model.model.base_model.model."
+    new_prefix = "base_model.model."
+
+    for key, value in state_dict.items():
+        new_key = key
+        if new_key.startswith(old_prefix):
+            new_key = new_prefix + new_key[len(old_prefix):]
+        if new_key != key:
+            num_changed += 1
+        remapped[new_key] = value
+    return remapped, num_changed
 
 
 def _cuda_sync():
@@ -194,6 +234,34 @@ def _load_base_and_adapter(
     print(f"[Head] trimmed lm_head to {num_classes} choice logits")
 
     model = PeftModel.from_pretrained(base_model, map_adapter_dir).to(device)
+    b_norms = [float(p.data.norm()) for n, p in model.named_parameters() if "lora_B" in n]
+    if b_norms and all(v == 0.0 for v in b_norms):
+        print("[Load] Standard PEFT adapter load left all LoRA-B tensors at zero; retrying with legacy key remap.")
+        base_model = AutoModelForCausalLM.from_pretrained(
+            base_name,
+            trust_remote_code=TRUST_REMOTE_CODE,
+            torch_dtype=(amp_dtype if device.type == "cuda" else None),
+            attn_implementation="sdpa",
+        ).to(device)
+        if hasattr(base_model.config, "use_cache"):
+            base_model.config.use_cache = False
+        if hasattr(base_model, "gradient_checkpointing_disable"):
+            base_model.gradient_checkpointing_disable()
+        model = get_peft_model(base_model, peft_cfg, adapter_name="default").to(device)
+        adapter_state = _load_adapter_checkpoint(map_adapter_dir)
+        adapter_state, num_remapped = _remap_legacy_peft_keys(adapter_state)
+        if num_remapped > 0:
+            print(f"[Load] Remapped {num_remapped} adapter tensors for legacy checkpoint compatibility.")
+        incompat = set_peft_model_state_dict(model, adapter_state, adapter_name="default")
+        missing_lora = [k for k in incompat.missing_keys if "lora_" in k]
+        unexpected_lora = [k for k in incompat.unexpected_keys if "lora_" in k]
+        if missing_lora or unexpected_lora:
+            raise RuntimeError(
+                "Legacy adapter load left unresolved LoRA tensors. "
+                f"missing={missing_lora[:8]} unexpected={unexpected_lora[:8]}"
+            )
+        trim_lm_head_to_choice_tokens(model.base_model.model, choice_token_ids)
+        print(f"[Head] trimmed lm_head to {num_classes} choice logits after legacy adapter load")
     model.eval()
     return tokenizer, model, num_classes
 

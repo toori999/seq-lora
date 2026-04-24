@@ -186,9 +186,9 @@ class WrapperBase(PeftModel):
         )
 
     def forward_logits(self, *args, **kwargs) -> torch.Tensor:
-        """Defines the forward pass for computing logits. This method is not implemented 
+        """Defines the forward pass for computing logits. This method is not implemented
         in the base class and needs to be implemented in subclasses.
-        
+
         Returns:
             torch.Tensor: The logits predicted by the model.
         """
@@ -196,7 +196,7 @@ class WrapperBase(PeftModel):
 
     def fit(self, train_loader, eval_loader):
         """Fits the model using the training data and evaluates it periodically.
-        
+
         Args:
             train_loader (DataLoader): The training data loader.
             eval_loader (DataLoader): The evaluation data loader.
@@ -265,12 +265,12 @@ class WrapperBase(PeftModel):
 
     def evaluate(self, eval_loader):
         """Evaluates the model using the evaluation data.
-    
+
         Args:
             eval_loader (DataLoader): The evaluation data loader.
-        
+
         Returns:
-            tuple: The evaluation results: accuracy, ECE (Expected Calibration Error), 
+            tuple: The evaluation results: accuracy, ECE (Expected Calibration Error),
                 negative log-likelihood (NLL), and Brier score.
         """
         self.eval()
@@ -346,7 +346,7 @@ class WrapperBase(PeftModel):
         return val_acc, val_ece, val_nll, val_brier
 
     def fit_evaluate(self):
-        """Performs the fitting and evaluation process, saving the results to checkpoints 
+        """Performs the fitting and evaluation process, saving the results to checkpoints
         and logging them to the WandB logger.
         """
         if self.accelerator.is_local_main_process:
@@ -387,7 +387,7 @@ class WrapperBase(PeftModel):
 
     def prepare_for_fit_evaluate(self, dataset, wandb_logger=None):
         """Prepares the model and data loaders for training and evaluation.
-    
+
         Args:
             dataset (Dataset): The dataset object containing train and test data loaders.
             wandb_logger (optional): The Weights & Biases logger for tracking experiments.
@@ -398,7 +398,7 @@ class WrapperBase(PeftModel):
         raw_eval_loaders = dict(getattr(dataset, "eval_loaders", {}) or {})
         raw_eval_splits = dict(getattr(dataset, "eval_split_name_by_task", {}) or {})
         source_task = str(getattr(dataset, "source_task", self.args.dataset))
-        
+
         anchor_loader = getattr(dataset, "anchor_dataloader", None)
         if anchor_loader is not None:
             anchor_loader = self.accelerator.prepare(anchor_loader)
@@ -435,6 +435,7 @@ class WrapperBase(PeftModel):
         self.test_loader = test_loader
         self.eval_loaders = {}
         self.eval_split_by_task = {}
+        self.eval_tasks = list(getattr(dataset, "eval_tasks", []) or [source_task])
         if raw_eval_loaders:
             if source_task in raw_eval_loaders:
                 self.eval_loaders[source_task] = self.test_loader
@@ -467,3 +468,4 @@ class WrapperBase(PeftModel):
             self.eval_split_by_task[eval_task_name] = str(
                 getattr(dataset, "eval_split_name", getattr(dataset, "source_eval_split_name", "validation"))
             )
+            self.eval_tasks = [eval_task_name]

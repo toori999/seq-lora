@@ -454,7 +454,7 @@ def preprocess_arc(
 
     def _fn(batch: Dict) -> Dict:
         questions, choices_col, answer_keys = batch["question"], batch.get("choices", None), batch["answerKey"]
-        prompts, labels = [], []
+        prompts, labels, num_choices_list = [], [], []
         for i in range(len(answer_keys)):
             try:
                 ex_choices = choices_col[i] if choices_col is not None else None
@@ -466,23 +466,31 @@ def preprocess_arc(
                     raise ValueError("choices < 2")
                 if len(labs) != len(txts):
                     raise ValueError("choice labels/text length mismatch")
+                if len(labs) > 4:
+                    raise ValueError(f"unsupported num_choices={len(labs)}")
                 label_order = [str(x) for x in labs]
                 mapping = {str(lab): str(txt) for lab, txt in zip(labs, txts)}
                 y = answer_key_to_index(answer_keys[i], label_order)
                 prompts.append(make_prompt_from_choices(qtext, mapping, label_order=label_order))
                 labels.append(y)
+                num_choices_list.append(len(labs))
             except Exception:
                 prompts.append("")
                 labels.append(-1)
+                num_choices_list.append(-1)
 
         enc = _tokenize_prompts(tokenizer, prompts, max_len, pad_to_max_length=pad_to_max_length)
         enc["labels"] = labels
+        enc["num_choices"] = num_choices_list
         return enc
 
-    ds2 = ds.map(_fn, batched=True).filter(lambda ex: ex["labels"] != -1)
+    ds2 = ds.map(_fn, batched=True).filter(lambda ex: ex["labels"] != -1 and 2 <= int(ex["num_choices"]) <= 4)
     if len(ds2) == 0:
         raise RuntimeError("ARC preprocess produced 0 examples.")
-    return _finalize_preprocessed_dataset(ds2)
+    return _finalize_preprocessed_dataset(
+        ds2,
+        keep_cols=("input_ids", "attention_mask", "labels", "num_choices"),
+    )
 
 
 

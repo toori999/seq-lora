@@ -39,8 +39,8 @@ def get_parser() -> ArgumentParser:
                         help="Number of samples to use during evaluation when training.")
     parser.add_argument('--bayes-eval-n-samples-final', type=int, default=10,
                         help="Number of samples to use during evaluation.")
-    
-    parser.add_argument('--bayes-eps', type=float, default=0.05)         
+
+    parser.add_argument('--bayes-eps', type=float, default=0.05)
     parser.add_argument('--bayes-gamma', type=float, default=8)
     parser.add_argument('--bayes-kllr', type=float, default=0.02)
     parser.add_argument('--bayes-beta', type=float, default=0.2)
@@ -51,8 +51,8 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--bayes-klreweighting', action='store_true',
                         help='Whether to use reweighting.')
 
-    parser.add_argument('--th', type=float, default=0.01)   
-    parser.add_argument('--iter', type=int, default=10)   
+    parser.add_argument('--th', type=float, default=0.01)
+    parser.add_argument('--iter', type=int, default=10)
     return parser
 
 
@@ -102,15 +102,15 @@ class TFBLoRA(WrapperBase):
     def __init__(self, model: PreTrainedModel, peft_config: PeftConfig, args, accelerator, adapter_name: str = "default"):
         super().__init__(model, peft_config, args, accelerator, adapter_name)
 
-        # same BLoBConfig as in the BLoB model, 
+        # same BLoBConfig as in the BLoB model,
         # only used during inference.
         self.blobconfig = BLoBConfig(bayes_eps = self.args.bayes_eps, bayes_beta = self.args.bayes_beta)
         self.load_lora_path = self.args.load_lora_path
         self.train_n_samples = self.args.bayes_train_n_samples
-        
+
         if self.args.load_lora_huggingface_repo is not None:
             repo_id = self.args.load_lora_huggingface_repo
-            subfolder = self.load_lora_path 
+            subfolder = self.load_lora_path
             self.load_adapter(repo_id, adapter_name='default', subfolder=subfolder)
             print(f'LoRA Model loaded successfully from HF repo: {repo_id}/{subfolder}')
             print('=====================')
@@ -119,7 +119,7 @@ class TFBLoRA(WrapperBase):
             self.load_adapter(self.load_lora_path, adapter_name='default')
             print(f'LoRA Model loaded successfully from local path: {self.load_lora_path}')
             print('=====================')
-    
+
         self.lora_layers = []
 
         def extract_lora_layers(module):
@@ -148,8 +148,8 @@ class TFBLoRA(WrapperBase):
         pct = 100.0 * step_num / total_steps
         suffix = f"  {extra}" if extra else ""
         print(f"[PROGRESS] {stage}: {step_num}/{total_steps} ({pct:.1f}%){suffix}", flush=True)
-                
-    def fit(self, anchor_loader, target_ratio=0.01, max_iters=10): 
+
+    def fit(self, anchor_loader, target_ratio=0.01, max_iters=10):
         # Initialize the binary search range [low, high]
         with torch.no_grad() and torch.inference_mode():
             low, high = 0.001, self.args.bayes_beta
@@ -171,12 +171,12 @@ class TFBLoRA(WrapperBase):
                 all_probs = []
 
                 # Evaluate the current bayes_beta
-                
-                for i, batch in enumerate(anchor_loader): 
+
+                for i, batch in enumerate(anchor_loader):
                     logits = self.forward_logits(batch, sample=True, n_samples=self.train_n_samples)
                     probs = torch.softmax(logits, dim=-1).mean(1)
                     predicted_classes = torch.argmax(probs, dim=-1)
-                    
+
                     all_predicted_classes.append(predicted_classes)
                     all_probs.append(probs)
                     self._maybe_log_progress(
@@ -216,7 +216,7 @@ class TFBLoRA(WrapperBase):
             print(f"[TFB-FIT] Optimal bayes_beta: {self.args.bayes_beta}", flush=True)
             return 1
 
-    
+
     def sample(self, module, status = True):
         """
         Set the sampling status of the model.
@@ -226,7 +226,7 @@ class TFBLoRA(WrapperBase):
                 child.sample(status)
             else:
                 self.sample(child, status)
-    
+
     def evaluate(self, eval_loader):
         self.eval()
         status = self.training
@@ -418,7 +418,7 @@ class TFBLoRA(WrapperBase):
             "std": float(sum(std_values) / max(len(std_values), 1)),
         }
 
-                
+
     def fit_evaluate(self):
         starttime = time.time()
         if self.accelerator.is_local_main_process:
@@ -444,12 +444,12 @@ class TFBLoRA(WrapperBase):
                 print(f"[TFB-FIT] starting anchor sweep: beta_upper={self.args.bayes_beta:.6f}", flush=True)
 
                 with torch.no_grad() and torch.inference_mode():
-                    for i, batch in enumerate(self.anchor_loader): 
+                    for i, batch in enumerate(self.anchor_loader):
                         self._update_lora_layers(self.lora_layers, 0)
                         ori_logits = self.forward_logits(batch, sample=True, n_samples=1)
                         ori_probs = torch.softmax(ori_logits, dim=-1).mean(1)
                         ori_predicted_classes = torch.argmax(ori_probs, dim=-1)
-                        
+
                         all_ori_predicted_classes.append(ori_predicted_classes)
                         all_ori_probs.append(ori_probs)
                         self._maybe_log_progress(
@@ -489,8 +489,17 @@ class TFBLoRA(WrapperBase):
                 raise RuntimeError("common_eval_utils is required for benchmark_mcdataset evaluation.")
             eval_loaders = getattr(self, "eval_loaders", None) or {eval_task_name: self.test_loader}
             eval_split_by_task = getattr(self, "eval_split_by_task", None) or {eval_task_name: eval_split_name}
+            eval_tasks = list(getattr(self, "eval_tasks", None) or list(eval_loaders.keys()))
+            dataset_obj = getattr(self, "dataset_obj", None)
 
-            for task_name, loader in eval_loaders.items():
+            for task_name in eval_tasks:
+                loader = eval_loaders.get(task_name)
+                if loader is None:
+                    if dataset_obj is None or not hasattr(dataset_obj, "get_eval_loader_for_task"):
+                        raise RuntimeError(f"Missing eval loader for task '{task_name}'")
+                    raw_loader = dataset_obj.get_eval_loader_for_task(task_name)
+                    loader = self.accelerator.prepare(raw_loader)
+                    self.eval_loaders[task_name] = loader
                 split_name = str(eval_split_by_task.get(task_name, "ood"))
                 task_eval_tag = f"{task_name}({split_name})"
                 task_key = re.sub(r"[^0-9A-Za-z_]+", "_", str(task_name)).strip("_") or "eval"
@@ -561,7 +570,7 @@ class TFBLoRA(WrapperBase):
                     'final_val_brier': val_brier,
                     "val_flip_ratio": val_flip_ratio
                                     })
-        
+
     def _modify_lora_layers(self, layers):
         """
         Recursively go through the model and modify LoraLayer instances.
@@ -582,36 +591,36 @@ class TFBLoRA(WrapperBase):
             else:
                 print(layer)
                 exit()
-    
+
     def _wrap_lora_layer_var_infer(self, lora_layer):
         lora_layer.lora_A_rho = nn.ParameterDict({})
         lora_layer.bayes_eps = self.blobconfig.bayes_eps
         lora_layer.bayes_beta = self.blobconfig.bayes_beta
         lora_layer.blobsample = True
-    
+
         for adapter_name in lora_layer._active_adapter:
             # ipdb.set_trace()
             dtype_A = lora_layer.lora_A[adapter_name].weight.dtype
             dtype_B = lora_layer.lora_B[adapter_name].weight.dtype
             lora_A = lora_layer.lora_A[adapter_name].weight.float()
             lora_B = lora_layer.lora_B[adapter_name].weight.float()
-            
-            # SVD the lora_B.weight 
+
+            # SVD the lora_B.weight
             U, D, V = torch.svd(lora_B) # svd is not performed for half precision.
 
             # infer the std of the posterior
             lora_std = lora_layer.bayes_beta / (torch.tile(D.reshape(-1, 1), dims=(1, lora_layer.in_features)) + 1e-6)
             if lora_layer.bayes_eps < 0:
                 lora_layer.lora_A_rho[adapter_name] = nn.Parameter(torch.log(torch.exp(lora_std)-1))
-            else: 
+            else:
                 lora_layer.lora_A_rho[adapter_name] = nn.Parameter(torch.sqrt(lora_std))
 
             # recalculating the lora_A' and lora_B'
             lora_layer.lora_B[adapter_name].weight = nn.Parameter(U @ torch.diag(D)).to(dtype=dtype_B)
             lora_layer.lora_A[adapter_name].weight = nn.Parameter(V.T @ lora_A).to(dtype=dtype_A)
-        
+
         return
-    
+
     def _update_lora_layers(self, layers, beta):
         """
         Recursively go through the model and modify LoraLayer instances.
@@ -624,13 +633,13 @@ class TFBLoRA(WrapperBase):
             else:
                 print(layer)
                 exit()
-    
+
     def _update_lora_layer_var_infer(self, lora_layer, beta):
-    
+
         for adapter_name in lora_layer._active_adapter:
             lora_B = lora_layer.lora_B[adapter_name].weight.float()
-            
-            # SVD the lora_B.weight 
+
+            # SVD the lora_B.weight
             U, D, V = torch.svd(lora_B) # svd is not performed for half precision.
             lora_layer.bayes_beta = beta
 
@@ -639,9 +648,9 @@ class TFBLoRA(WrapperBase):
 
             if lora_layer.bayes_eps < 0:
                 lora_layer.lora_A_rho[adapter_name] = nn.Parameter(torch.log(torch.exp(lora_std)-1))
-            else: 
+            else:
                 lora_layer.lora_A_rho[adapter_name] = nn.Parameter(torch.sqrt(lora_std))
-        
+
         return
 
     def _mask_num_choices(self, logits: torch.Tensor, num_choices) -> torch.Tensor:
@@ -663,7 +672,7 @@ class TFBLoRA(WrapperBase):
             return logits.masked_fill(invalid, -1e9)
 
         return logits
-    
+
     def forward_logits(self, batch, sample=True, n_samples=1, **kwargs) -> torch.Tensor:
         if _is_mc_dataset_type(self.args.dataset_type):
             inputs, _, _ = batch
@@ -701,7 +710,7 @@ class TFBLoRA(WrapperBase):
             else:
                 res = []
                 for _ in range(n_samples):
-                    res.append(self.base_model(**batch).logits)    
+                    res.append(self.base_model(**batch).logits)
                 return torch.stack(res, dim = 1)
 
-    
+

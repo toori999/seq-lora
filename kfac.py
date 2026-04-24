@@ -15,6 +15,8 @@
 Kronecker-factored approximate curvature methods.
 """
 _CURRENT_LAST_IDX = None
+_CURRENT_TOKEN_MASK = None
+_CURRENT_TOKEN_MODE = "last"
 
 import sys
 import logging
@@ -162,8 +164,10 @@ def save_input_hook(
     svd_dtype: t.dtype = t.float64,
 ):
     """
-    Capture input activations at the SAME token position used by forward_call_for_kfac:
-      idx = _CURRENT_LAST_IDX = attention_mask.sum(dim=1)-1   (last non-pad)
+    Capture input activations at the SAME token position used by forward_call_for_kfac.
+    Supported modes:
+      - "last": use `_CURRENT_LAST_IDX` (the selected answer position)
+      - "all_valid": use `_CURRENT_TOKEN_MASK` (all non-pad tokens)
     """
 
     def input_hook(_module: nn.Module, pos_args: tuple[t.Tensor]) -> None:
@@ -175,17 +179,31 @@ def save_input_hook(
         # h can be [B, L, Din] or [B, Din]
         if h.dim() == 3:
             B, L, Din = h.shape
-            idx = _CURRENT_LAST_IDX
-
-            if idx is None:
-                # Fallback (should rarely happen if forward_call sets it each batch)
-                a = h[:, -1, :]
+            if _CURRENT_TOKEN_MODE == "all_valid":
+                token_mask = _CURRENT_TOKEN_MASK
+                if token_mask is None:
+                    a = h.reshape(B * L, Din)
+                else:
+                    token_mask = token_mask.to(device=h.device, dtype=t.bool)
+                    if token_mask.shape != (B, L):
+                        raise RuntimeError(
+                            f"Token mask shape mismatch: expected {(B, L)}, got {tuple(token_mask.shape)}"
+                        )
+                    a = h[token_mask]
+                    if a.numel() == 0:
+                        a = h[:, -1, :]
             else:
-                # Ensure idx is on same device and in range
-                idx = idx.to(device=h.device, dtype=t.long)
-                idx = idx.clamp(min=0, max=L - 1)
+                idx = _CURRENT_LAST_IDX
 
-                a = h[t.arange(B, device=h.device), idx, :]  # [B, Din]
+                if idx is None:
+                    # Fallback (should rarely happen if forward_call sets it each batch)
+                    a = h[:, -1, :]
+                else:
+                    # Ensure idx is on same device and in range
+                    idx = idx.to(device=h.device, dtype=t.long)
+                    idx = idx.clamp(min=0, max=L - 1)
+
+                    a = h[t.arange(B, device=h.device), idx, :]  # [B, Din]
 
         elif h.dim() == 2:
             # Already [B, Din]
@@ -223,8 +241,10 @@ def save_output_grad_hook(
     svd_dtype: t.dtype = t.float64,
 ):
     """
-    Capture output gradients at the SAME token position used by forward_call_for_kfac:
-      idx = _CURRENT_LAST_IDX = attention_mask.sum(dim=1)-1   (last non-pad)
+    Capture output gradients at the SAME token position used by forward_call_for_kfac.
+    Supported modes:
+      - "last": use `_CURRENT_LAST_IDX` (the selected answer position)
+      - "all_valid": use `_CURRENT_TOKEN_MASK` (all non-pad tokens)
     """
 
     def output_grad_hook(_module: nn.Module, _, out_pos_grad: tuple[Tensor]) -> None:
@@ -236,15 +256,29 @@ def save_output_grad_hook(
         # g can be [B, L, Dout] or [B, Dout]
         if g.dim() == 3:
             B, L, Dout = g.shape
-            idx = _CURRENT_LAST_IDX
-
-            if idx is None:
-                s = g[:, -1, :]
+            if _CURRENT_TOKEN_MODE == "all_valid":
+                token_mask = _CURRENT_TOKEN_MASK
+                if token_mask is None:
+                    s = g.reshape(B * L, Dout)
+                else:
+                    token_mask = token_mask.to(device=g.device, dtype=t.bool)
+                    if token_mask.shape != (B, L):
+                        raise RuntimeError(
+                            f"Token mask shape mismatch: expected {(B, L)}, got {tuple(token_mask.shape)}"
+                        )
+                    s = g[token_mask]
+                    if s.numel() == 0:
+                        s = g[:, -1, :]
             else:
-                idx = idx.to(device=g.device, dtype=t.long)
-                idx = idx.clamp(min=0, max=L - 1)
+                idx = _CURRENT_LAST_IDX
 
-                s = g[t.arange(B, device=g.device), idx, :]  # [B, Dout]
+                if idx is None:
+                    s = g[:, -1, :]
+                else:
+                    idx = idx.to(device=g.device, dtype=t.long)
+                    idx = idx.clamp(min=0, max=L - 1)
+
+                    s = g[t.arange(B, device=g.device), idx, :]  # [B, Dout]
 
         elif g.dim() == 2:
             s = g

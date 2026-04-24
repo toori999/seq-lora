@@ -1,4 +1,11 @@
 from __future__ import annotations
+"""
+Dedicated fork point for the global-exact-subspace Seq-LoRA variant.
+
+This file is intentionally copied from the current `seq_eval_iid_constantq.py`
+baseline so future global-exact changes can stay isolated under
+`global_exact_subspace/` without disturbing the main evaluation scripts.
+"""
 from dataclasses import dataclass
 from contextlib import contextmanager, nullcontext
 from typing import Dict, Iterable, List, Tuple, Optional, Sequence
@@ -12,6 +19,11 @@ import gc
 import sys
 import zlib
 import warnings
+
+_THIS_DIR = os.path.dirname(__file__)
+_REPO_ROOT = os.path.dirname(_THIS_DIR)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 import torch
 import torch.nn as nn
@@ -27,11 +39,11 @@ from tqdm import tqdm
 from laplace.curvature.asdl import AsdlGGN, batch_gradient as asdl_batch_gradient
 import asdl.operations.linear as asdl_linear_ops
 import kfac as hook_kfac
-from lssm_ffbs_obs import kalman_filter, lag_one_smoothed_covariances, rts_smoother
-from seq_lora_subspace_obs import (
+from global_exact_subspace.lssm_ffbs_obs import kalman_filter
+from global_exact_subspace.seq_lora_subspace_global_exact import (
+    _chol_upper,
     build_global_kronecker_eigenspace,
     materialize_mean_psd_from_factors,
-    project_curvature_factors_to_subspace,
     prepare_lgssm_observations,
     solve_xhat_from_grad,
 )
@@ -85,11 +97,11 @@ _patch_asdl_linear_batch_grads_weight_dtype()
 # =========================
 
 SEED = 0
-TRUST_REMOTE_CODE = False
+TRUST_REMOTE_CODE = True
 
 MAX_SEQ_LEN = 300
 EVAL_BSZ = 48
-KFAC_BSZ = 4
+KFAC_BSZ = 8
 
 # KFAC / train-slice loaders remain conservative
 NUM_WORKERS = 0
@@ -98,38 +110,34 @@ NUM_WORKERS = 0
 EVAL_NUM_WORKERS = 0
 EVAL_PREFETCH_FACTOR = 4
 
-N_KFAC = 8
+N_KFAC = 16
 LR_THRESHOLD = 256
-MAX_KFAC_SAMPLES_PER_SLICE = -1
-KFAC_BACKEND = "hook"
+MAX_KFAC_SAMPLES_PER_SLICE = 2048
+KFAC_BACKEND = "asdl"
 KFAC_TOKEN_MODE = "all_valid"
 
-MU_OBS_SCALE = 2
+MU_OBS_SCALE = 1
 MU_OBS_BATCHES = 32
 S_Q = 1.0
-Q_MODE = "constant"
 P1_VAR = 1.0
 
 SUBSPACE_DIM_PER_MODULE = 64
+LAMBDA_DAMP = 1e-4
 MC_EVAL_SAMPLES = 32
 
-ADAPTIVE_Q_WARMSTART_VAR = 1.0
-ADAPTIVE_Q_EIG_FLOOR = 1e-8
-
-POSTERIOR_TAU = 1.0
-TEMP_BAYES = 1.0
+POSTERIOR_TAU = 1
+TEMP_BAYES = 1.1
 DISABLE_DROPOUT_DURING_KFAC_MU = False
-MU_OBS_USE_SELECTED_TOKEN_WEIGHT_GRADS = False
 
 TOKENIZER_PADDING_SIDE = "left"
 BAYESIAN_PEFT_ADD_EOS = False
 IID_EVAL_SPLIT = "validation"
 BAYESIAN_PEFT_PERTURB_LM_HEAD = True
-HF_DATASETS_CACHE_DIR = os.path.join(os.path.dirname(__file__), ".hf_datasets")
+
+HF_DATASETS_CACHE_DIR = os.path.join(_THIS_DIR, ".hf_datasets")
 
 from common_eval_utils import (
     SCIENCEQA_CURRIC_TASK_NAME,
-    SCIENCEQA_GRADE12_TASK_NAME,
     DynamicEvalCollator,
     get_choice_token_ids,
     get_transformer_and_lm_head,
@@ -139,7 +147,6 @@ from common_eval_utils import (
     load_task_dataset,
     make_accuracy as _make_accuracy,
     make_ece as _make_ece,
-    preprocess_task,
     set_inference_fast as _set_inference_fast,
 )
 from seq_eval_iid import (
@@ -153,7 +160,7 @@ from seq_eval_iid import (
     _remap_bayesian_peft_adapter_keys,
 )
 
-_BAYESIAN_PEFT_ROOT = os.path.join(os.path.dirname(__file__), "bayesian-peft")
+_BAYESIAN_PEFT_ROOT = os.path.join(_REPO_ROOT, "bayesian-peft")
 if _BAYESIAN_PEFT_ROOT not in sys.path:
     sys.path.append(_BAYESIAN_PEFT_ROOT)
 
@@ -845,108 +852,6 @@ def _get_param_weight(model: nn.Module, module_path: str) -> nn.Parameter:
         raise RuntimeError(f"[mu-obs] .weight is not nn.Parameter: {module_path}")
     return w
 
-
-def _select_token_rows(tensor: Tensor) -> Tensor:
-    if tensor.dim() == 3:
-        bsz, seq_len, width = tensor.shape
-        if str(getattr(hook_kfac, "_CURRENT_TOKEN_MODE", "last")) == "all_valid":
-            token_mask = getattr(hook_kfac, "_CURRENT_TOKEN_MASK", None)
-            if token_mask is None:
-                return tensor.reshape(bsz * seq_len, width)
-            token_mask = token_mask.to(device=tensor.device, dtype=torch.bool)
-            if token_mask.shape != (bsz, seq_len):
-                raise RuntimeError(
-                    f"Token mask shape mismatch: expected {(bsz, seq_len)}, got {tuple(token_mask.shape)}"
-                )
-            rows = tensor[token_mask]
-            return rows if rows.numel() > 0 else tensor[:, -1, :]
-
-        idx = getattr(hook_kfac, "_CURRENT_LAST_IDX", None)
-        if idx is None:
-            return tensor[:, -1, :]
-        idx = idx.to(device=tensor.device, dtype=torch.long).clamp(min=0, max=seq_len - 1)
-        return tensor[torch.arange(bsz, device=tensor.device), idx, :]
-
-    if tensor.dim() == 2:
-        return tensor
-
-    raise RuntimeError(f"Unexpected tensor dim for selected-token rows: {tuple(tensor.shape)}")
-
-
-@dataclass
-class _ModuleGradState:
-    weight_shape: torch.Size
-    inputs: List[Tensor]
-    grad_outputs: List[Tensor]
-
-
-class _SelectedTokenWeightGradCapture:
-    def __init__(self, model: nn.Module, module_names: List[str]):
-        self._states: Dict[str, _ModuleGradState] = {}
-        self._handles = []
-
-        for module_name in module_names:
-            module = model.get_submodule(module_name)
-            if not isinstance(module, nn.Linear):
-                raise RuntimeError(
-                    f"Selected-token local grad capture expects nn.Linear, got {type(module)} for {module_name}"
-                )
-            self._states[module_name] = _ModuleGradState(
-                weight_shape=module.weight.shape,
-                inputs=[],
-                grad_outputs=[],
-            )
-            self._handles.append(module.register_forward_pre_hook(self._make_input_hook(module_name)))
-            self._handles.append(module.register_full_backward_hook(self._make_grad_hook(module_name)))
-
-    def _make_input_hook(self, module_name: str):
-        def _hook(_module: nn.Module, pos_args: tuple[Tensor, ...]) -> None:
-            if not pos_args:
-                raise RuntimeError(f"Missing forward inputs for module {module_name}")
-            self._states[module_name].inputs.append(_select_token_rows(pos_args[0].detach()))
-
-        return _hook
-
-    def _make_grad_hook(self, module_name: str):
-        def _hook(_module: nn.Module, _grad_input, grad_output: tuple[Tensor, ...]) -> None:
-            if not grad_output:
-                raise RuntimeError(f"Missing backward outputs for module {module_name}")
-            self._states[module_name].grad_outputs.append(_select_token_rows(grad_output[0].detach()))
-
-        return _hook
-
-    def take_weight_grads(
-        self,
-        *,
-        device: torch.device,
-        dtype: torch.dtype,
-    ) -> Dict[str, Tensor]:
-        weight_grads: Dict[str, Tensor] = {}
-        for module_name, state in self._states.items():
-            grad_weight = torch.zeros(state.weight_shape, device=device, dtype=dtype)
-            if len(state.inputs) != len(state.grad_outputs):
-                raise RuntimeError(
-                    f"Hook event mismatch for {module_name}: "
-                    f"{len(state.inputs)} inputs vs {len(state.grad_outputs)} grad outputs"
-                )
-            for a_rows, s_rows in zip(state.inputs, state.grad_outputs):
-                if a_rows.shape[0] != s_rows.shape[0]:
-                    raise RuntimeError(
-                        f"Selected-row mismatch for {module_name}: "
-                        f"inputs={tuple(a_rows.shape)} grad_outputs={tuple(s_rows.shape)}"
-                    )
-                a_rows = a_rows.to(device=device, dtype=dtype)
-                s_rows = s_rows.to(device=device, dtype=dtype)
-                grad_weight.addmm_(s_rows.T, a_rows, beta=1.0, alpha=1.0)
-            state.inputs.clear()
-            state.grad_outputs.clear()
-            weight_grads[module_name] = grad_weight
-        return weight_grads
-
-    def remove(self) -> None:
-        while self._handles:
-            self._handles.pop().remove()
-
 @torch.no_grad()
 def materialize_scalar_Q_list(
     var_list: Sequence[float],
@@ -956,139 +861,6 @@ def materialize_scalar_Q_list(
 ) -> List[Tensor]:
     I = torch.eye(L, device=device, dtype=dtype)
     return [float(var) * I for var in var_list]
-
-
-def _adaptive_q_eps(dtype: torch.dtype) -> float:
-    return 1e-8 if dtype == torch.float64 else 1e-6
-
-
-def _symmetrize(M: Tensor) -> Tensor:
-    return 0.5 * (M + M.T)
-
-
-def _relative_floor_psd_eigs(evals: Tensor, eps_rel: float) -> Tensor:
-    evals = evals.clamp_min(0.0)
-    if eps_rel <= 0.0:
-        return evals
-    scale = torch.amax(evals)
-    return evals.clamp_min(scale * float(eps_rel))
-
-
-@torch.no_grad()
-def _build_module_q_basis(
-    H_x_list: List[Tensor],
-    *,
-    eps_rel: float,
-    dtype: torch.dtype,
-) -> Tuple[Tensor, Tensor]:
-    if len(H_x_list) == 0:
-        raise ValueError("H_x_list must be non-empty")
-    H_mean = torch.zeros_like(H_x_list[0], dtype=dtype)
-    for H_x in H_x_list:
-        H_mean.add_(H_x.to(dtype=dtype))
-    H_mean = _symmetrize(H_mean / float(len(H_x_list)))
-    nu_bar, U_q = torch.linalg.eigh(H_mean)
-    nu_bar = _relative_floor_psd_eigs(nu_bar, eps_rel)
-    return U_q.to(dtype=dtype), nu_bar.to(dtype=dtype)
-
-
-@torch.no_grad()
-def _estimate_module_q_diag(
-    x_smooth: List[Tensor],
-    P_smooth: List[Tensor],
-    lag_covariances: List[Tensor],
-    U_q: Tensor,
-    nu_bar: Tensor,
-    *,
-    eps: float,
-) -> Tuple[Tensor, Dict[str, float]]:
-    T = len(x_smooth)
-    L = x_smooth[0].numel()
-    dtype = x_smooth[0].dtype
-    device = x_smooth[0].device
-
-    nu_safe = nu_bar.to(device=device, dtype=dtype).clamp_min(float(eps))
-
-    if T <= 1:
-        q_prior = torch.ones(L, device=device, dtype=dtype)
-        return q_prior, {
-            "alpha_mix": 0.0,
-            "q_em_min": 1.0,
-            "q_em_mean": 1.0,
-            "q_em_max": 1.0,
-            "q_prior_min": 1.0,
-            "q_prior_mean": 1.0,
-            "q_prior_max": 1.0,
-            "q_diag_min": 1.0,
-            "q_diag_mean": 1.0,
-            "q_diag_max": 1.0,
-            "r_eff": float(L),
-        }
-
-    U_q_t = U_q.to(device=device, dtype=dtype)
-
-    mu_basis = [U_q_t.T @ x_t.to(device=device, dtype=dtype) for x_t in x_smooth]
-    diag_basis = []
-    cross_diag = [torch.zeros(L, device=device, dtype=dtype)]
-
-    for P_t in P_smooth:
-        P_basis = U_q_t.T @ P_t.to(device=device, dtype=dtype) @ U_q_t
-        diag_basis.append(torch.diagonal(_symmetrize(P_basis)))
-    for t in range(1, T):
-        C_basis = U_q_t.T @ lag_covariances[t].to(device=device, dtype=dtype) @ U_q_t
-        cross_diag.append(torch.diagonal(C_basis))
-
-    q_em_terms: List[Tensor] = []
-    for t in range(1, T):
-        delta_mu = mu_basis[t] - mu_basis[t - 1]
-        term_t = (
-            delta_mu.square()
-            + diag_basis[t]
-            + diag_basis[t - 1]
-            - 2.0 * cross_diag[t]
-        )
-        q_em_terms.append(term_t)
-
-    q_em = torch.stack(q_em_terms, dim=0).mean(dim=0).clamp_min(float(eps))
-    kappa = torch.median((nu_safe * q_em).clamp_min(float(eps)))
-    q_prior = (kappa / nu_safe).clamp_min(float(eps))
-
-    r_eff = (nu_safe.sum().square() / nu_safe.square().sum().clamp_min(float(eps))).clamp_min(1.0)
-    alpha_mix = float((T - 1) / ((T - 1) + float(r_eff.item())))
-    q_diag = (alpha_mix * q_em + (1.0 - alpha_mix) * q_prior).clamp_min(float(eps))
-
-    def _summ(x: Tensor, prefix: str) -> Dict[str, float]:
-        return {
-            f"{prefix}_min": float(x.min().item()),
-            f"{prefix}_mean": float(x.mean().item()),
-            f"{prefix}_max": float(x.max().item()),
-        }
-
-    stats: Dict[str, float] = {
-        "alpha_mix": float(alpha_mix),
-        "r_eff": float(r_eff.item()),
-    }
-    stats.update(_summ(q_em, "q_em"))
-    stats.update(_summ(q_prior, "q_prior"))
-    stats.update(_summ(q_diag, "q_diag"))
-    return q_diag, stats
-
-
-@torch.no_grad()
-def materialize_constant_module_Q_list(
-    U_q: Tensor,
-    q_diag: Tensor,
-    num_steps: int,
-    *,
-    s_q: float,
-    device: torch.device,
-    dtype: torch.dtype,
-) -> List[Tensor]:
-    U_t = U_q.to(device=device, dtype=dtype)
-    q_t = q_diag.to(device=device, dtype=dtype)
-    base_Q = (U_t * (float(s_q) * q_t).unsqueeze(0)) @ U_t.T
-    base_Q = _symmetrize(base_Q)
-    return [base_Q.clone() for _ in range(num_steps)]
 
 def estimate_mu_global_list_from_slice_grads(
     model: nn.Module,
@@ -1243,64 +1015,141 @@ def estimate_mu_global_list_from_slice_grads_asdl(
     return mu_global_list
 
 
-def estimate_mu_global_list_from_slice_local_weight_grads(
+def build_global_exact_empirical_fisher_slice_stats_asdl(
     model: nn.Module,
     slice_loaders: List[DataLoader],
     forward_call_for_kfac,
-    module_names: List[str],
-    module_subspace_info: Dict[str, Dict[str, Tensor]],
-    module_R_lists: Dict[str, List[Tensor]],
+    module_specs: List[Dict],
     device: torch.device,
     n_batches_per_slice: int = 1,
     dtype: torch.dtype = torch.float64,
-) -> List[Tensor]:
-    model.train()
+    *,
+    lambda_damp: float = 1e-4,
+    disable_dropout: bool = False,
+) -> Tuple[List[Tensor], List[Tensor], List[Tensor]]:
+    """Build full L_total-state empirical Fisher/Gaussian observations.
+
+    This replaces the old module-wise block-diagonal approximation:
+      - g_x,t is accumulated in the concatenated global subspace
+      - H_x,t is the full empirical Fisher in that same subspace
+      - cross-module covariance terms are retained
+    """
+    if len(module_specs) == 0:
+        raise ValueError("module_specs must be non-empty")
+
+    cpu_device = torch.device("cpu")
+    wrapper = _AsdlForwardWrapper(
+        model,
+        forward_call_for_kfac,
+        force_fp32_output=False,
+    ).to(device)
+    wrapper.train()
+    if disable_dropout:
+        _set_dropout_modules_training(wrapper, enabled=False)
+
+    spec_by_name = {str(spec["name"]): spec for spec in module_specs}
+    L_total = sum(int(spec["L"]) for spec in module_specs)
+    eye_total = torch.eye(L_total, device=cpu_device, dtype=dtype)
+    global_Hx_list: List[Tensor] = []
+    global_R_list: List[Tensor] = []
     mu_global_list: List[Tensor] = []
-    grad_capture = _SelectedTokenWeightGradCapture(model, module_names)
 
-    try:
+    with _temporarily_select_lora_a_weights(model):
+        asdl_module_names = list(_iter_weight_block_module_names(wrapper))
+        if set(asdl_module_names) != set(spec_by_name.keys()):
+            missing = sorted(set(spec_by_name.keys()) - set(asdl_module_names))
+            extra = sorted(set(asdl_module_names) - set(spec_by_name.keys()))
+            raise RuntimeError(
+                "ASDL global-exact module-name mismatch. "
+                f"missing={missing[:5]} extra={extra[:5]}"
+            )
+
+        block_slices: Dict[str, slice] = {}
+        offset = 0
+        for name in asdl_module_names:
+            numel = int(_get_param_weight(model, name).numel())
+            block_slices[name] = slice(offset, offset + numel)
+            offset += numel
+
+        proj_specs = []
+        for spec in module_specs:
+            proj_specs.append(
+                {
+                    "name": str(spec["name"]),
+                    "offset": int(spec["offset"]),
+                    "L": int(spec["L"]),
+                    "U_lora": spec["subspace_info"]["U_lora"].to(
+                        device=device,
+                        dtype=torch.float32,
+                        non_blocking=True,
+                    ).contiguous(),
+                }
+            )
+
         for t, loader in enumerate(slice_loaders):
-            g_x_parts = [
-                torch.zeros(int(module_subspace_info[name]["U_lora"].shape[1]), device=device, dtype=dtype)
-                for name in module_names
-            ]
-            n_seen = 0
+            g_sum = torch.zeros(L_total, device=cpu_device, dtype=dtype)
+            H_sum = torch.zeros((L_total, L_total), device=cpu_device, dtype=dtype)
+            n_examples = 0
 
-            for batch in loader:
-                if n_seen >= n_batches_per_slice:
+            for batch_idx, batch in enumerate(loader):
+                if batch_idx >= n_batches_per_slice:
                     break
 
-                model.zero_grad(set_to_none=True)
-                loss = F.cross_entropy(
-                    forward_call_for_kfac(model, batch),
-                    batch["labels"].to(device=device, non_blocking=True),
+                batch = {
+                    key: (value.to(device) if isinstance(value, torch.Tensor) else value)
+                    for key, value in batch.items()
+                }
+                labels = batch["labels"].to(device=device, non_blocking=True)
+                input_shape = tuple(batch["input_ids"].shape)
+
+                def closure():
+                    wrapper.zero_grad(set_to_none=True)
+                    logits = wrapper(**batch)
+                    loss = F.cross_entropy(logits.float(), labels, reduction="sum")
+                    loss.backward()
+                    return loss
+
+                batch_grads, _ = asdl_batch_gradient(
+                    wrapper,
+                    closure,
+                    input_shape,
+                    return_outputs=True,
                 )
-                loss.backward()
+                batch_grads = batch_grads.to(device=device, dtype=torch.float32)
+                bsz = int(batch_grads.shape[0])
+                batch_x_grads = torch.zeros((bsz, L_total), device=device, dtype=torch.float32)
 
-                local_weight_grads = grad_capture.take_weight_grads(device=device, dtype=dtype)
-                for mi, name in enumerate(module_names):
-                    g_x_parts[mi] += (
-                        module_subspace_info[name]["U_lora"].to(device=device, dtype=dtype).T
-                        @ local_weight_grads[name].reshape(-1)
-                    )
-                n_seen += 1
+                for proj_spec in proj_specs:
+                    block = batch_grads[:, block_slices[proj_spec["name"]]]
+                    x_block = block @ proj_spec["U_lora"]
+                    start = proj_spec["offset"]
+                    end = start + proj_spec["L"]
+                    batch_x_grads[:, start:end] = x_block
 
-            if n_seen == 0:
-                raise RuntimeError(f"[mu-obs-local] slice {t} loader produced no batches")
+                batch_x_cpu = batch_x_grads.to(device=cpu_device, dtype=dtype)
+                g_sum.add_(batch_x_cpu.sum(dim=0))
+                H_sum.addmm_(batch_x_cpu.T, batch_x_cpu, beta=1.0, alpha=1.0)
+                n_examples += bsz
 
-            mu_parts: List[Tensor] = []
-            for mi, name in enumerate(module_names):
-                g_x_avg = g_x_parts[mi] / float(n_seen)
-                mu_part = solve_xhat_from_grad(
-                    module_R_lists[name][t].to(device=device, dtype=dtype),
-                    g_x_avg,
-                )
-                mu_parts.append(mu_part)
-            mu_global_list.append(torch.cat(mu_parts, dim=0).cpu())
+                del batch_grads, batch_x_grads, batch_x_cpu
+                gc.collect()
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
 
-        return mu_global_list
-    finally:
-        grad_capture.remove()
+            if n_examples == 0:
+                raise RuntimeError(f"[global-exact] slice {t} loader produced no batches")
+
+            g_x_t = g_sum / float(n_examples)
+            H_x_t = H_sum / float(n_examples)
+            H_x_t = 0.5 * (H_x_t + H_x_t.T)
+            R_t = _chol_upper(H_x_t + float(lambda_damp) * eye_total)
+            mu_t = solve_xhat_from_grad(R_t, g_x_t)
+
+            global_Hx_list.append(H_x_t)
+            global_R_list.append(R_t)
+            mu_global_list.append(mu_t)
+
+    return global_Hx_list, global_R_list, mu_global_list
 
 
 def _move_subspace_info(
@@ -1318,32 +1167,6 @@ def _move_subspace_info(
         else:
             moved[key] = value
     return moved
-
-def _report_module_constant_q_results(module_stats: Dict[str, Dict[str, float]], s_q: float) -> None:
-    if not module_stats:
-        print("[Module Q] No module statistics available.")
-        return
-
-    def _summ(key: str) -> str:
-        vals = [float(stats[key]) for stats in module_stats.values()]
-        return f"min={min(vals):.6f} mean={sum(vals)/len(vals):.6f} max={max(vals):.6f}"
-
-    print("\n=== Module-Constant Q Report ===")
-    print(f"[Module Q] exposed scale s_Q={float(s_q):.6f}")
-    print(
-        f"[Module Q Summary] "
-        f"alpha({_summ('alpha_mix')}) | "
-        f"qdiag({_summ('q_diag_mean')})"
-    )
-    print("[Module Q Per Module]")
-    for name, stats in module_stats.items():
-        print(
-            f"  {name}: "
-            f"alpha={stats['alpha_mix']:.6f} "
-            f"r_eff={stats['r_eff']:.3f} "
-            f"nu=[{stats['nu_min']:.6f}, {stats['nu_mean']:.6f}, {stats['nu_max']:.6f}] "
-            f"qdiag=[{stats['q_diag_min']:.6f}, {stats['q_diag_mean']:.6f}, {stats['q_diag_max']:.6f}]"
-        )
 
 
 def _report_scalar_constant_q_results(s_q: float) -> None:
@@ -1568,7 +1391,7 @@ def eval_bayes_fast_restricted_4way_probmean(
 # =========================
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate Bayesian Seq-LoRA on various tasks with selectable process-noise Q modes.")
+    parser = argparse.ArgumentParser(description="Evaluate Bayesian Seq-LoRA on various tasks with configurable KFAC backend and constant process noise.")
     parser.add_argument("--seed", type=int, default=SEED, help="Random seed.")
     parser.add_argument(
         "--trust_remote_code",
@@ -1621,15 +1444,6 @@ def main():
         ),
     )
     parser.add_argument(
-        "--mu_obs_use_selected_token_weight_grads",
-        type=_parse_bool,
-        default=MU_OBS_USE_SELECTED_TOKEN_WEIGHT_GRADS,
-        help=(
-            "If true, estimate mu-observation g_x from selected-token local linear weight grads "
-            "instead of full parameter gradients. Token selection follows --kfac_token_mode."
-        ),
-    )
-    parser.add_argument(
         "--task",
         type=str,
         required=True,
@@ -1668,14 +1482,7 @@ def main():
         "--s_q",
         type=float,
         default=float(S_Q),
-        help="Global process-noise scale. In module_constant mode it scales the learned per-module Q_m; in constant mode it sets Q_t = s_Q * I.",
-    )
-    parser.add_argument(
-        "--q_mode",
-        type=str,
-        choices=["module_constant", "constant"],
-        default=Q_MODE,
-        help="Process-noise mode: learned per-module constant Q_m, or a shared scalar constant Q_t = s_Q * I.",
+        help="Global process-noise scale used for the shared constant process noise Q_t = s_Q * I.",
     )
     parser.add_argument(
         "--constant_q_var",
@@ -1690,6 +1497,12 @@ def main():
         type=int,
         default=SUBSPACE_DIM_PER_MODULE,
         help="Subspace dimension retained per module.",
+    )
+    parser.add_argument(
+        "--lambda_damp",
+        type=float,
+        default=LAMBDA_DAMP,
+        help="Diagonal damping added to the global L_total empirical Fisher before solving mu_t / Kalman observations.",
     )
     parser.add_argument("--mc_eval_samples", type=int, default=MC_EVAL_SAMPLES, help="Number of MC posterior samples during evaluation.")
     parser.add_argument(
@@ -1716,7 +1529,7 @@ def main():
     parser.add_argument(
         "--eval_protocol",
         type=str,
-        default="bayesian_peft",
+        default="default",
         choices=["default", "bayesian_peft"],
         help="Evaluation protocol. bayesian_peft matches the original bayesian-peft prompt/target-id setup.",
     )
@@ -1892,52 +1705,16 @@ def main():
             slice_source = "task_train_split"
 
     # -------------------------
-    # Eval set: dynamic padding + length sorting
+    # Eval task validation only. Actual eval datasets are loaded lazily later.
     # -------------------------
     eval_tasks = _parse_eval_tasks(args.eval_tasks, args.task)
-    eval_task_to_proc: Dict[str, object] = {}
     for eval_task in eval_tasks:
-        use_direct_eval_bayesian_peft = _uses_direct_bayesian_peft_data(eval_task, eval_protocol)
-        if use_direct_eval_bayesian_peft:
-            eval_task_dataset = _build_bayesian_peft_task_dataset(
-                tokenizer,
-                eval_task,
-                add_space=bool(args.bayesian_peft_add_space),
-                max_seq_len=args.max_seq_len,
-            )
-            eval_num_classes = int(eval_task_dataset.n_labels)
-        else:
-            eval_num_classes = _get_num_classes_for_protocol(eval_task, eval_protocol)
+        eval_num_classes = _get_num_classes_for_protocol(eval_task, eval_protocol)
         if eval_num_classes != num_classes:
             raise ValueError(
                 f"Eval task '{eval_task}' has {eval_num_classes} classes, "
                 f"but source task '{args.task}' has {num_classes} classes."
             )
-        if use_direct_eval_bayesian_peft:
-            eval_split = str(args.iid_eval_split) if eval_task == args.task else "validation"
-            eval_task_to_proc[eval_task] = _make_direct_bayesian_peft_loader(
-                eval_task_dataset.dset[eval_split],
-                collate_fn=_BayesianPeftCLMCollator(eval_task_dataset),
-                batch_size=args.eval_bsz,
-                shuffle=False,
-                drop_last=True,
-                num_workers=args.eval_num_workers,
-                pin_memory=pin_memory,
-                prefetch_factor=args.eval_prefetch_factor,
-            )
-        else:
-            eval_raw = load_iid_test_set(eval_task) if eval_task == args.task else load_eval_dataset(eval_task)
-            eval_proc = _preprocess_task_for_protocol(
-                eval_task,
-                eval_raw,
-                tokenizer,
-                args.max_seq_len,
-                protocol=eval_protocol,
-                bayesian_peft_add_space=bool(args.bayesian_peft_add_space),
-                pad_to_max_length=False,
-            )
-            eval_proc = eval_proc.add_column("seq_len", [len(x) for x in eval_proc["input_ids"]])
-            eval_task_to_proc[eval_task] = eval_proc.sort("seq_len")
 
     # -------------------------
     # KFAC/train slices: dynamic padding to reduce wasted compute on long MMLU inputs
@@ -2106,7 +1883,7 @@ def main():
                 torch.cuda.empty_cache()
                 torch.cuda.ipc_collect()
 
-        module_subspace_info, module_R_lists, module_Hx_lists = {}, {}, {}
+        module_subspace_info = {}
         for name in module_names:
             H_factors = H_factor_per_module[name]
             G_factors = G_factor_per_module[name]
@@ -2130,24 +1907,11 @@ def main():
                 subspace_dim=args.subspace_dim_per_module,
                 eps_eig=1e-6,
             )
-            H_x_list, R_list = project_curvature_factors_to_subspace(
-                H_factors=H_factors,
-                G_B_factors=G_factors,
-                subspace_info=subspace_info_gpu,
-                lambda_damp=1e-4,
-                H_matrix_scale=1.0,
-                G_matrix_scale=1.0,
-                work_device=device,
-                out_device=cpu_device,
-                dtype=torch.float64,
-            )
             module_subspace_info[name] = _move_subspace_info(
                 subspace_info_gpu,
                 device=cpu_device,
                 dtype=torch.float64,
             )
-            module_Hx_lists[name] = H_x_list
-            module_R_lists[name] = R_list
 
             H_factors.clear()
             G_factors.clear()
@@ -2173,36 +1937,30 @@ def main():
         L_total = offset
         lora_cache = build_loraA_cache(model, module_specs, device=device)
 
-        estimate_mu_fn = (
-            estimate_mu_global_list_from_slice_grads_asdl
-            if str(args.kfac_backend) == "asdl"
-            else (
-                estimate_mu_global_list_from_slice_local_weight_grads
-                if bool(args.mu_obs_use_selected_token_weight_grads)
-                else estimate_mu_global_list_from_slice_grads
+        if str(args.kfac_backend) != "asdl":
+            raise NotImplementedError(
+                "global_exact_subspace currently only supports --kfac_backend asdl. "
+                "The global L_total posterior path relies on ASDL per-example gradients."
             )
-        )
-        mu_kwargs = (
-            {"disable_dropout": bool(args.disable_dropout_during_kfac_mu)}
-            if str(args.kfac_backend) == "asdl"
-            else {}
-        )
-        mu_global_list_raw = estimate_mu_fn(
-            model,
-            slice_loaders,
-            forward_call_for_kfac,
-            module_names,
-            module_subspace_info,
-            module_R_lists,
-            device,
-            args.mu_obs_batches,
-            torch.float64,
-            **mu_kwargs,
+
+        global_Hx_list, global_R_list, mu_global_list_raw = build_global_exact_empirical_fisher_slice_stats_asdl(
+            model=model,
+            slice_loaders=slice_loaders,
+            forward_call_for_kfac=forward_call_for_kfac,
+            module_specs=module_specs,
+            device=device,
+            n_batches_per_slice=args.mu_obs_batches,
+            dtype=torch.float64,
+            lambda_damp=float(args.lambda_damp),
+            disable_dropout=bool(args.disable_dropout_during_kfac_mu),
         )
         mu_global_list = [float(args.mu_obs_scale) * mu_t for mu_t in mu_global_list_raw]
 
-        print(f"\n=== Kalman Filter Only (module-wise) ===")
-        print(f"[Kalman] modules={len(module_specs)} L_total={L_total}")
+        print(f"\n=== Global Exact Subspace Posterior ===")
+        print(
+            f"[Kalman] modules={len(module_specs)} L_total={L_total} "
+            f"curvature=empirical_fisher lambda_damp={float(args.lambda_damp):.6g}"
+        )
 
         if args.forecast_horizon > 0:
             print(
@@ -2212,141 +1970,60 @@ def main():
         else:
             print(f"\nDirectly sampling final posterior (t=T): S={args.mc_eval_samples}")
 
-        x_sample_parts: List[Tensor] = []
-        module_constant_q_stats: Dict[str, Dict[str, float]] = {}
-        use_module_constant_q = args.q_mode == "module_constant"
-        for spec in module_specs:
-            name = spec["name"]
-            offset = int(spec["offset"])
-            Lm = int(spec["L"])
-            mu_module_list = [
-                mu_t[offset : offset + Lm].to(device=cpu_device, dtype=torch.float64)
-                for mu_t in mu_global_list
-            ]
-            H_x_list = module_Hx_lists[name]
-            H_obs_list, y_list = prepare_lgssm_observations(
-                module_R_lists[name],
-                mu_list=mu_module_list,
-            )
-            m1 = torch.zeros(Lm, device=cpu_device, dtype=torch.float64)
-            P1 = float(args.p1_var) * torch.eye(Lm, device=cpu_device, dtype=torch.float64)
+        H_obs_list, y_list = prepare_lgssm_observations(
+            global_R_list,
+            mu_list=mu_global_list,
+        )
+        m1 = torch.zeros(L_total, device=cpu_device, dtype=torch.float64)
+        P1 = float(args.p1_var) * torch.eye(L_total, device=cpu_device, dtype=torch.float64)
+        Q_list = materialize_scalar_Q_list(
+            [float(args.s_q) for _ in range(T)],
+            L=L_total,
+            device=cpu_device,
+            dtype=torch.float64,
+        )
 
-            if use_module_constant_q:
-                U_q, nu_bar = _build_module_q_basis(
-                    H_x_list,
-                    eps_rel=ADAPTIVE_Q_EIG_FLOOR,
-                    dtype=torch.float64,
-                )
+        x_filt, P_filt, _, _ = kalman_filter(
+            H_list=H_obs_list,
+            y_list=y_list,
+            Q_list=Q_list,
+            m1=m1,
+            P1=P1,
+        )
+        mu_T, cov_T = _forecast_from_final_posterior(
+            x_T=x_filt[-1],
+            P_T=P_filt[-1],
+            Q_list=Q_list,
+            horizon=int(args.forecast_horizon),
+        )
+        cov_T_stable = cov_T + torch.eye(
+            cov_T.shape[0],
+            device=cov_T.device,
+            dtype=cov_T.dtype,
+        ) * 1e-6
 
-                warm_Q_list = materialize_scalar_Q_list(
-                    [ADAPTIVE_Q_WARMSTART_VAR for _ in range(T)],
-                    L=Lm,
-                    device=cpu_device,
-                    dtype=torch.float64,
-                )
-                x_filt_w, P_filt_w, x_pred_w, P_pred_w = kalman_filter(
-                    H_list=H_obs_list,
-                    y_list=y_list,
-                    Q_list=warm_Q_list,
-                    m1=m1,
-                    P1=P1,
-                )
-                x_smooth_w, P_smooth_w, J_w = rts_smoother(
-                    x_filt_w,
-                    P_filt_w,
-                    x_pred_w,
-                    P_pred_w,
-                    warm_Q_list,
-                )
-                lag_cov_w = lag_one_smoothed_covariances(P_smooth_w, J_w)
-                q_diag, q_stats = _estimate_module_q_diag(
-                    x_smooth_w,
-                    P_smooth_w,
-                    lag_cov_w,
-                    U_q,
-                    nu_bar,
-                    eps=_adaptive_q_eps(torch.float64),
-                )
-                Q_list = materialize_constant_module_Q_list(
-                    U_q,
-                    q_diag,
-                    num_steps=T,
-                    s_q=float(args.s_q),
-                    device=cpu_device,
-                    dtype=torch.float64,
-                )
-                module_constant_q_stats[name] = {
-                    **q_stats,
-                    "nu_min": float(nu_bar.min().item()),
-                    "nu_mean": float(nu_bar.mean().item()),
-                    "nu_max": float(nu_bar.max().item()),
-                }
-            else:
-                Q_list = materialize_scalar_Q_list(
-                    [float(args.s_q) for _ in range(T)],
-                    L=Lm,
-                    device=cpu_device,
-                    dtype=torch.float64,
-                )
+        dist = torch.distributions.MultivariateNormal(
+            mu_T,
+            covariance_matrix=cov_T_stable,
+        )
 
-            x_filt_m, P_filt_m, _, _ = kalman_filter(
-                H_list=H_obs_list,
-                y_list=y_list,
-                Q_list=Q_list,
-                m1=m1,
-                P1=P1,
-            )
-            mu_T_m, cov_T_m = _forecast_from_final_posterior(
-                x_T=x_filt_m[-1],
-                P_T=P_filt_m[-1],
-                Q_list=Q_list,
-                horizon=int(args.forecast_horizon),
-            )
-            cov_T_stable = cov_T_m + torch.eye(
-                cov_T_m.shape[0],
-                device=cov_T_m.device,
-                dtype=cov_T_m.dtype,
-            ) * 1e-6
-
-            dist_m = torch.distributions.MultivariateNormal(
-                mu_T_m,
-                covariance_matrix=cov_T_stable,
-            )
-            x_sample_parts.append(dist_m.sample((int(args.mc_eval_samples),)))
-
-            del (
-                H_obs_list,
-                y_list,
-                Q_list,
-                x_filt_m,
-                P_filt_m,
-                mu_T_m,
-                cov_T_m,
-                cov_T_stable,
-                dist_m,
-            )
-            if use_module_constant_q:
-                del (
-                    warm_Q_list,
-                    x_filt_w,
-                    P_filt_w,
-                    x_pred_w,
-                    P_pred_w,
-                    x_smooth_w,
-                    P_smooth_w,
-                    J_w,
-                    lag_cov_w,
-                    q_diag,
-                )
-            gc.collect()
-
-        if use_module_constant_q:
-            _report_module_constant_q_results(module_constant_q_stats, args.s_q)
-        else:
-            _report_scalar_constant_q_results(args.s_q)
-        del mu_global_list, mu_global_list_raw
-        x_samples_T = torch.cat(x_sample_parts, dim=1).to(dtype=torch.float32)
-        del x_sample_parts
+        _report_scalar_constant_q_results(args.s_q)
+        x_samples_T = dist.sample((int(args.mc_eval_samples),)).to(dtype=torch.float32)
+        del (
+            global_Hx_list,
+            global_R_list,
+            mu_global_list,
+            mu_global_list_raw,
+            H_obs_list,
+            y_list,
+            Q_list,
+            x_filt,
+            P_filt,
+            mu_T,
+            cov_T,
+            cov_T_stable,
+            dist,
+        )
 
     eval_collator = DynamicEvalCollator(
         tokenizer=tokenizer,
@@ -2367,9 +2044,44 @@ def main():
 
     effective_posterior_tau = float(args.posterior_tau)
 
-    def eval_one(tag: str, proc_or_loader):
+    def _load_eval_proc_or_loader(eval_task: str):
+        if _uses_direct_bayesian_peft_data(eval_task, eval_protocol):
+            eval_task_dataset = _build_bayesian_peft_task_dataset(
+                tokenizer,
+                eval_task,
+                add_space=bool(args.bayesian_peft_add_space),
+                max_seq_len=args.max_seq_len,
+            )
+            eval_split = str(args.iid_eval_split) if eval_task == args.task else "validation"
+            return _make_direct_bayesian_peft_loader(
+                eval_task_dataset.dset[eval_split],
+                collate_fn=_BayesianPeftCLMCollator(eval_task_dataset),
+                batch_size=args.eval_bsz,
+                shuffle=False,
+                drop_last=True,
+                num_workers=args.eval_num_workers,
+                pin_memory=pin_memory,
+                prefetch_factor=args.eval_prefetch_factor,
+            )
+
+        eval_raw = load_iid_test_set(eval_task) if eval_task == args.task else load_eval_dataset(eval_task)
+        eval_proc = _preprocess_task_for_protocol(
+            eval_task,
+            eval_raw,
+            tokenizer,
+            args.max_seq_len,
+            protocol=eval_protocol,
+            bayesian_peft_add_space=bool(args.bayesian_peft_add_space),
+            pad_to_max_length=False,
+        )
+        eval_proc = eval_proc.add_column("seq_len", [len(x) for x in eval_proc["input_ids"]])
+        return eval_proc.sort("seq_len")
+
+    def eval_one(tag: str, eval_task: str):
+        proc_or_loader = _load_eval_proc_or_loader(eval_task)
         if isinstance(proc_or_loader, DataLoader):
             loader = proc_or_loader
+            proc_eval = None
         else:
             proc_eval = (
                 proc_or_loader.remove_columns(["seq_len"])
@@ -2415,6 +2127,11 @@ def main():
             print(f"  irrelevant_rate: {metrics['irrelevant_rate']*100:.2f}%")
         print(f"  [Timing] Bayes sampling: {metrics['time_bayes_sec']:.3f}s")
 
+        del loader, proc_eval, proc_or_loader
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+
     model.zero_grad(set_to_none=True)
     if device.type == "cuda":
         torch.cuda.empty_cache()
@@ -2422,7 +2139,7 @@ def main():
     print(f"\n=== Evaluation: source={args.task} | targets={eval_tasks} ===")
     for eval_task in eval_tasks:
         split_name = "iid" if eval_task == args.task else "ood"
-        eval_one(f"{eval_task}_{split_name}", eval_task_to_proc[eval_task])
+        eval_one(f"{eval_task}_{split_name}", eval_task)
     print(f"\n[Done] Evaluation complete for source task {args.task}.")
 
 if __name__ == "__main__":
