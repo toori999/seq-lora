@@ -5,6 +5,7 @@ import gc
 import os
 import random
 import time
+from dataclasses import dataclass
 from typing import Dict, List, MutableMapping, Optional, Sequence
 
 import numpy as np
@@ -13,6 +14,7 @@ import torch.nn as nn
 from laplace import Laplace
 import laplace.utils.matrix as laplace_matrix_utils
 from peft import PeftConfig, PeftModel
+from safetensors import safe_open
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -21,13 +23,17 @@ from datasets import concatenate_datasets
 from common_eval_utils import (
     SCIENCEQA_CURRIC_TASK_NAME,
     DynamicEvalCollator,
+    get_active_adapter_name,
     get_choice_token_ids,
+    get_lm_head_dropout,
+    get_lm_head_lora_scaling,
     get_task_num_classes,
     get_transformer_and_lm_head,
     load_eval_dataset,
     load_task_dataset,
     make_accuracy as _make_accuracy,
     make_ece as _make_ece,
+    pick_adapter_module,
     preprocess_task,
 )
 
@@ -57,6 +63,25 @@ SUPPORTED_TASKS = [
     "sciq",
     SCIENCEQA_CURRIC_TASK_NAME,
 ]
+
+TASK_ALIASES = {
+    "winogrande_s": "wgs",
+    "winogrande-small": "wgs",
+    "winogrande_m": "wgm",
+    "winogrande-medium": "wgm",
+    "arc-challenge": "arc-c",
+    "arc_challenge": "arc-c",
+    "arc-c": "arc-c",
+    "arc_easy": "arc-e",
+    "arc-easy": "arc-e",
+    "arc-e": "arc-e",
+    "openbookqa": "obqa",
+    "open_book_qa": "obqa",
+    "obqa": "obqa",
+    "boolq": "boolq",
+    "sciq": "sciq",
+    SCIENCEQA_CURRIC_TASK_NAME: SCIENCEQA_CURRIC_TASK_NAME,
+}
 
 _LAPLACE_FIT_CACHE_FORMAT = "official_source_laplace_fit_cache_v1"
 FIXED_INTERNAL_SEED = 0
@@ -255,6 +280,104 @@ def _split_train_for_testing_set(train_raw, testing_set: str):
     return split["train"], split["test"]
 
 
+def _normalize_task_name(task_name: str) -> str:
+    raw = str(task_name or "").strip()
+    if not raw:
+        return ""
+    key = raw.lower().replace("/", "-")
+    normalized = TASK_ALIASES.get(key, TASK_ALIASES.get(raw, raw))
+    if normalized not in SUPPORTED_TASKS:
+        raise ValueError(
+            f"Unsupported task_name={task_name!r}. Supported canonical tasks: "
+            f"{', '.join(SUPPORTED_TASKS)}"
+        )
+    return normalized
+
+
+def _infer_task_name_from_adapter_dir(adapter_dir: str) -> str:
+    parts = [p.lower() for p in os.path.normpath(adapter_dir).split(os.sep) if p]
+    joined = "/".join(parts)
+    ordered_aliases = [
+        ("scienceqa_text_closedchoice_grade2_11", SCIENCEQA_CURRIC_TASK_NAME),
+        (SCIENCEQA_CURRIC_TASK_NAME, SCIENCEQA_CURRIC_TASK_NAME),
+        ("arc-challenge", "arc-c"),
+        ("arc_challenge", "arc-c"),
+        ("arc-easy", "arc-e"),
+        ("arc_easy", "arc-e"),
+        ("openbookqa", "obqa"),
+        ("obqa", "obqa"),
+        ("boolq", "boolq"),
+        ("winogrande_s", "wgs"),
+        ("winogrande_m", "wgm"),
+        ("sciq", "sciq"),
+    ]
+    for needle, task in ordered_aliases:
+        if needle in joined:
+            return task
+    raise ValueError(
+        "Could not infer --task_name from adapter path. Pass one of: "
+        f"{', '.join(SUPPORTED_TASKS)}"
+    )
+
+
+@dataclass(frozen=True)
+class AdapterHeadInfo:
+    mode: str
+    rows: Optional[int]
+    source_key: str
+
+
+def _iter_adapter_tensor_shapes(adapter_dir: str):
+    st_path = os.path.join(adapter_dir, "adapter_model.safetensors")
+    if os.path.exists(st_path):
+        with safe_open(st_path, framework="pt", device="cpu") as f:
+            for key in f.keys():
+                yield key, tuple(int(x) for x in f.get_tensor(key).shape)
+        return
+
+    bin_path = os.path.join(adapter_dir, "adapter_model.bin")
+    if os.path.exists(bin_path):
+        state = torch.load(bin_path, map_location="cpu")
+        for key, value in state.items():
+            if isinstance(value, torch.Tensor):
+                yield key, tuple(int(x) for x in value.shape)
+        return
+
+    raise FileNotFoundError(
+        f"Could not find adapter_model.safetensors or adapter_model.bin under {adapter_dir}"
+    )
+
+
+def _inspect_adapter_head(adapter_dir: str, num_classes: int) -> AdapterHeadInfo:
+    lm_head_rows: List[tuple[str, int]] = []
+    has_lm_head_tensor = False
+    for key, shape in _iter_adapter_tensor_shapes(adapter_dir):
+        if "lm_head" not in key:
+            continue
+        has_lm_head_tensor = True
+        if len(shape) < 2:
+            continue
+        if key.endswith("lm_head.base_layer.weight") or ".lm_head.base_layer.weight" in key:
+            lm_head_rows.insert(0, (key, int(shape[0])))
+        elif ".lm_head.lora_B." in key and key.endswith(".weight"):
+            lm_head_rows.append((key, int(shape[0])))
+
+    if not has_lm_head_tensor:
+        return AdapterHeadInfo(mode="no_lm_head_adapter", rows=None, source_key="")
+    if not lm_head_rows:
+        return AdapterHeadInfo(mode="unknown_lm_head_adapter", rows=None, source_key="")
+
+    source_key, rows = lm_head_rows[0]
+    if rows == int(num_classes):
+        return AdapterHeadInfo(mode="trimmed_head", rows=rows, source_key=source_key)
+    if rows > int(num_classes):
+        return AdapterHeadInfo(mode="full_vocab_head", rows=rows, source_key=source_key)
+    raise ValueError(
+        f"Adapter lm_head rows={rows} from {source_key!r}, but task has "
+        f"{int(num_classes)} classes. Check --task_name."
+    )
+
+
 def _tensor_groups_to_cpu(groups):
     return [[tensor.detach().cpu() for tensor in group] for group in groups]
 
@@ -427,11 +550,131 @@ def trim_lm_head_to_choice_tokens(model: nn.Module, choice_token_ids: torch.Tens
         base.config.vocab_size = int(choice_token_ids.numel())
 
 
+class ChoiceRestrictedLoraLMHead(nn.Module):
+    """Full-vocab PEFT lm_head restricted to the task's choice-token rows."""
+
+    def __init__(
+        self,
+        original_lm_head: nn.Module,
+        choice_token_ids: torch.Tensor,
+        adapter_name: str,
+    ):
+        super().__init__()
+        device = choice_token_ids.device
+        ids = choice_token_ids.to(device=device, dtype=torch.long)
+
+        base_weight = getattr(original_lm_head, "weight", None)
+        if base_weight is None and hasattr(original_lm_head, "base_layer"):
+            base_weight = getattr(original_lm_head.base_layer, "weight", None)
+        if base_weight is None:
+            raise RuntimeError("Could not locate lm_head base weight for full-vocab adapter restriction.")
+
+        base_bias = getattr(original_lm_head, "bias", None)
+        if base_bias is None and hasattr(original_lm_head, "base_layer"):
+            base_bias = getattr(original_lm_head.base_layer, "bias", None)
+
+        weight = base_weight.index_select(0, ids).detach().to(device=device, dtype=torch.float32)
+        bias = (
+            None
+            if base_bias is None
+            else base_bias.index_select(0, ids).detach().to(device=device, dtype=torch.float32)
+        )
+
+        self.linear = nn.Linear(
+            in_features=int(weight.shape[1]),
+            out_features=int(weight.shape[0]),
+            bias=(bias is not None),
+            device=device,
+            dtype=torch.float32,
+        )
+        self.linear.weight.data.copy_(weight)
+        self.linear.weight.requires_grad = False
+        if bias is not None:
+            self.linear.bias.data.copy_(bias)
+            self.linear.bias.requires_grad = False
+
+        A_mod = pick_adapter_module(getattr(original_lm_head, "lora_A", None), adapter_name)
+        B_mod = pick_adapter_module(getattr(original_lm_head, "lora_B", None), adapter_name)
+        if A_mod is None or B_mod is None or not hasattr(A_mod, "weight") or not hasattr(B_mod, "weight"):
+            self.lora_A = None
+            self.lora_B = None
+        else:
+            A_w = A_mod.weight.detach().to(device=device, dtype=torch.float32)
+            B_w = B_mod.weight.index_select(0, ids).detach().to(device=device, dtype=torch.float32)
+            self.lora_A = nn.Linear(
+                in_features=int(A_w.shape[1]),
+                out_features=int(A_w.shape[0]),
+                bias=False,
+                device=device,
+                dtype=torch.float32,
+            )
+            self.lora_B = nn.Linear(
+                in_features=int(B_w.shape[1]),
+                out_features=int(B_w.shape[0]),
+                bias=False,
+                device=device,
+                dtype=torch.float32,
+            )
+            self.lora_A.weight.data.copy_(A_w)
+            self.lora_B.weight.data.copy_(B_w)
+
+        dropout = get_lm_head_dropout(original_lm_head, adapter_name)
+        self.lora_dropout = dropout if dropout is not None else nn.Identity()
+        self.scaling = float(get_lm_head_lora_scaling(original_lm_head, adapter_name))
+
+    @property
+    def weight(self) -> torch.Tensor:
+        return self.linear.weight
+
+    @property
+    def bias(self) -> Optional[torch.Tensor]:
+        return self.linear.bias
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        if hidden_states.ndim == 3:
+            hidden_states = hidden_states[:, -1, :]
+        h = hidden_states.to(dtype=torch.float32)
+        logits = self.linear(h)
+        if self.lora_A is not None and self.lora_B is not None:
+            logits = logits + self.lora_B(self.lora_A(self.lora_dropout(h))) * self.scaling
+        return logits
+
+
+def restrict_full_vocab_lm_head_to_choice_tokens(
+    peft_model: PeftModel,
+    choice_token_ids: torch.Tensor,
+) -> None:
+    base = peft_model.get_base_model() if hasattr(peft_model, "get_base_model") else peft_model
+    _, lm_head = get_transformer_and_lm_head(peft_model)
+    adapter_name = get_active_adapter_name(peft_model)
+    restricted = ChoiceRestrictedLoraLMHead(
+        original_lm_head=lm_head,
+        choice_token_ids=choice_token_ids,
+        adapter_name=adapter_name,
+    )
+    if hasattr(base, "lm_head"):
+        base.lm_head = restricted
+    elif hasattr(base, "set_output_embeddings"):
+        base.set_output_embeddings(restricted)
+    else:
+        raise RuntimeError("Could not replace lm_head with restricted choice head.")
+    if hasattr(base, "config") and hasattr(base.config, "vocab_size"):
+        base.config.vocab_size = int(choice_token_ids.numel())
+
+
 class SourceStyleLaplaceWrapper(nn.Module):
-    def __init__(self, peft_model: PeftModel, amp_dtype: torch.dtype):
+    def __init__(
+        self,
+        peft_model: PeftModel,
+        amp_dtype: torch.dtype,
+        choice_token_ids: Optional[torch.Tensor] = None,
+        num_classes: Optional[int] = None,
+    ):
         super().__init__()
         self.peft_model = peft_model
         self.amp_dtype = amp_dtype
+        self.choice_token_ids = choice_token_ids
+        self.num_classes = num_classes
 
     @property
     def device(self) -> torch.device:
@@ -452,7 +695,18 @@ class SourceStyleLaplaceWrapper(nn.Module):
                 use_cache=False,
                 return_dict=True,
             )
-            logits = out.logits[:, -1, :].to(dtype=torch.float32)
+            logits = out.logits
+            if logits.ndim == 3:
+                logits = logits[:, -1, :]
+            elif logits.ndim != 2:
+                raise RuntimeError(f"Expected 2D or 3D logits, got shape={tuple(logits.shape)}")
+            if (
+                self.choice_token_ids is not None
+                and self.num_classes is not None
+                and logits.size(-1) != int(self.num_classes)
+            ):
+                logits = logits.index_select(-1, self.choice_token_ids.to(device=logits.device))
+            logits = logits.to(dtype=torch.float32)
         return _mask_invalid_choices(logits, num_choices)
 
 
@@ -616,9 +870,22 @@ def eval_laplace_source_mc_corr(
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Official-source-style Laplace-LoRA evaluation for MCQA.")
-    ap.add_argument("--task_name", type=str, required=True, choices=SUPPORTED_TASKS)
+    ap.add_argument(
+        "--task_name",
+        type=str,
+        default="",
+        help=(
+            "Source task. If omitted, inferred from --map_adapter_dir when possible. "
+            f"Canonical tasks: {', '.join(SUPPORTED_TASKS)}"
+        ),
+    )
     ap.add_argument("--map_adapter_dir", type=str, required=True)
-    ap.add_argument("--model_name_or_path", type=str, default="")
+    ap.add_argument(
+        "--model_name_or_path",
+        type=str,
+        default="",
+        help="Optional override. By default this is read from adapter_config.json.",
+    )
     ap.add_argument("--output_dir", type=str, default="./outputs_laplace_official_source")
     ap.add_argument("--eval_tasks", type=str, default="iid")
     ap.add_argument("--max_length", type=int, default=300)
@@ -638,6 +905,12 @@ def main() -> None:
     ap.add_argument("--force_refit", action="store_true", help="Ignore saved KFAC/Hessian cache and recompute la.fit().")
     ap.add_argument("--force_reprior", action="store_true", help="Ignore saved prior precision cache and re-optimize prior.")
     args = ap.parse_args()
+    args.map_adapter_dir = os.path.abspath(args.map_adapter_dir)
+    args.task_name = (
+        _normalize_task_name(args.task_name)
+        if str(args.task_name).strip()
+        else _infer_task_name_from_adapter_dir(args.map_adapter_dir)
+    )
 
     requested_seed = int(args.seed)
     effective_seed = int(FIXED_INTERNAL_SEED)
@@ -677,9 +950,28 @@ def main() -> None:
 
     num_classes = get_task_num_classes(args.task_name)
     choice_token_ids = get_choice_token_ids(tokenizer, device, num_classes)
-    trim_lm_head_to_choice_tokens(base, choice_token_ids)
-    print(f"[Head] trimmed lm_head to {num_classes} choice logits")
-    model = PeftModel.from_pretrained(base, args.map_adapter_dir, is_trainable=True).to(device)
+    adapter_head = _inspect_adapter_head(args.map_adapter_dir, num_classes)
+    print(
+        "[Adapter head] "
+        f"mode={adapter_head.mode} rows={adapter_head.rows} source={adapter_head.source_key or 'n/a'}"
+    )
+    if adapter_head.mode in {"trimmed_head", "no_lm_head_adapter", "unknown_lm_head_adapter"}:
+        trim_lm_head_to_choice_tokens(base, choice_token_ids)
+        print(f"[Head] trimmed base lm_head to {num_classes} choice logits before adapter load")
+        model = PeftModel.from_pretrained(base, args.map_adapter_dir, is_trainable=True).to(device)
+        head_cache_tag = "trimmedhead"
+        wrapper_choice_ids = None
+    elif adapter_head.mode == "full_vocab_head":
+        model = PeftModel.from_pretrained(base, args.map_adapter_dir, is_trainable=True).to(device)
+        restrict_full_vocab_lm_head_to_choice_tokens(model, choice_token_ids)
+        print(
+            f"[Head] loaded full-vocab adapter then restricted lm_head to "
+            f"{num_classes} choice logits"
+        )
+        head_cache_tag = "fullvocab_choicehead"
+        wrapper_choice_ids = choice_token_ids
+    else:
+        raise RuntimeError(f"Unsupported adapter head mode: {adapter_head.mode}")
     model.eval()
 
     selected_param_names = _configure_laplace_trainable_params(model, args.laplace_sub)
@@ -687,7 +979,12 @@ def main() -> None:
     for name in selected_param_names[:8]:
         print(f"  {name}")
 
-    laplace_model = SourceStyleLaplaceWrapper(model, amp_dtype).to(device)
+    laplace_model = SourceStyleLaplaceWrapper(
+        model,
+        amp_dtype,
+        choice_token_ids=wrapper_choice_ids,
+        num_classes=num_classes,
+    ).to(device)
 
     train_raw_full, val_raw, test_raw = load_task_dataset(args.task_name)
     if args.task_name == SCIENCEQA_CURRIC_TASK_NAME:
@@ -743,7 +1040,7 @@ def main() -> None:
     fit_loader = _make_loader(iid_train, int(args.fit_bsz), shuffle=fit_shuffle, drop_last=False)
     prior_loader = _make_loader(iid_prior, int(args.per_device_eval_batch_size), shuffle=False, drop_last=False)
 
-    subset_tag = f"official_source_trimmedhead_{args.laplace_sub}"
+    subset_tag = f"official_source_{head_cache_tag}_{args.laplace_sub}"
     prior_mode = "valsplit" if (args.task_name == SCIENCEQA_CURRIC_TASK_NAME or args.testing_set == "val") else "trainvalsplit"
     fit_cache_path = os.path.join(
         args.output_dir,
