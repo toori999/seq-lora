@@ -1,0 +1,1 @@
+2026-04-19 01:34:53,315 - /home/tori/projects/Seq-LoRA/Seq_LoRA/bayesian-peft/modelwrappers/wrapperbase.py[line:346] - INFO: val_acc: 0.8714788556098938, val_ece: 0.09991325438022614, val_nll: 0.580078125, val_brier: 0.2275390625
