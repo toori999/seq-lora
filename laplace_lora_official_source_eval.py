@@ -23,7 +23,9 @@ from datasets import concatenate_datasets
 from common_eval_utils import (
     SCIENCEQA_CURRIC_TASK_NAME,
     DynamicEvalCollator,
+    answer_key_to_index,
     get_active_adapter_name,
+    get_choice_labels,
     get_choice_token_ids,
     get_lm_head_dropout,
     get_lm_head_lora_scaling,
@@ -35,6 +37,7 @@ from common_eval_utils import (
     make_ece as _make_ece,
     pick_adapter_module,
     preprocess_task,
+    _tokenize_prompts,
 )
 
 try:
@@ -375,6 +378,109 @@ def _inspect_adapter_head(adapter_dir: str, num_classes: int) -> AdapterHeadInfo
     raise ValueError(
         f"Adapter lm_head rows={rows} from {source_key!r}, but task has "
         f"{int(num_classes)} classes. Check --task_name."
+    )
+
+
+def _is_arc_task(task_name: str) -> bool:
+    return str(task_name).lower().strip() in {"arc-c", "arc-e"}
+
+
+def _is_bayesian_peft_arc_adapter(task_name: str, adapter_dir: str, base_model_name: str) -> bool:
+    if not _is_arc_task(task_name):
+        return False
+    path = os.path.normpath(adapter_dir).lower()
+    return "llama" in str(base_model_name).lower() and (
+        "arc-challenge" in path or "arc-easy" in path
+    )
+
+
+def _task_num_classes(task_name: str, bayesian_peft_arc_style: bool) -> int:
+    if bayesian_peft_arc_style and _is_arc_task(task_name):
+        return 5
+    return get_task_num_classes(task_name)
+
+
+def preprocess_bayesian_peft_arc(
+    ds,
+    tokenizer: AutoTokenizer,
+    max_len: int,
+    pad_to_max_length: bool = True,
+):
+    """Match bayesian-peft's mcdataset ARC setup: A-E logits, no 4-choice filter."""
+
+    def _fn(batch: Dict) -> Dict:
+        prompts: List[str] = []
+        labels: List[int] = []
+        for question, choices, answer_key in zip(
+            batch["question"],
+            batch["choices"],
+            batch["answerKey"],
+        ):
+            try:
+                label_order = [str(x) for x in choices["label"]]
+                text_by_label = {
+                    str(label): str(text)
+                    for label, text in zip(choices["label"], choices["text"])
+                }
+                choice_lines = "\n".join(
+                    f"{label}) {text_by_label[label]}" for label in label_order
+                )
+                prompts.append(
+                    "Return the label of the correct answer for the question below.\n\n"
+                    f"Question: {question}\n"
+                    f"Choices:\n{choice_lines}\n"
+                    "Answer:"
+                )
+
+                answer = str(answer_key).strip()
+                if answer.isdigit():
+                    y = int(answer) - 1
+                else:
+                    y = answer_key_to_index(answer, get_choice_labels(5))
+                if y < 0 or y >= 5:
+                    raise ValueError(f"ARC label out of range: {answer_key!r}")
+                labels.append(y)
+            except Exception:
+                prompts.append("")
+                labels.append(-1)
+
+        enc = _tokenize_prompts(
+            tokenizer,
+            prompts,
+            max_len,
+            pad_to_max_length=pad_to_max_length,
+        )
+        enc["labels"] = labels
+        return enc
+
+    ds2 = ds.map(_fn, batched=True)
+    ds2 = ds2.filter(lambda ex: ex["labels"] != -1)
+    return ds2.remove_columns(
+        [c for c in ds2.column_names if c not in {"input_ids", "attention_mask", "labels"}]
+    )
+
+
+def _preprocess_laplace_task(
+    task_name: str,
+    ds,
+    tokenizer: AutoTokenizer,
+    max_len: int,
+    *,
+    bayesian_peft_arc_style: bool,
+):
+    if bayesian_peft_arc_style and _is_arc_task(task_name):
+        return preprocess_bayesian_peft_arc(
+            ds,
+            tokenizer,
+            max_len,
+            pad_to_max_length=False,
+        )
+    return preprocess_task(
+        task_name,
+        ds,
+        tokenizer,
+        max_len,
+        pad_to_max_length=False,
     )
 
 
@@ -948,7 +1054,15 @@ def main() -> None:
     if hasattr(base.config, "use_cache"):
         base.config.use_cache = False
 
-    num_classes = get_task_num_classes(args.task_name)
+    bayesian_peft_arc_style = _is_bayesian_peft_arc_adapter(
+        args.task_name,
+        args.map_adapter_dir,
+        base_model_name,
+    )
+    if bayesian_peft_arc_style:
+        print("[Dataset style] bayesian-peft ARC mcdataset: using 5 A-E logits without 4-choice filtering")
+
+    num_classes = _task_num_classes(args.task_name, bayesian_peft_arc_style)
     choice_token_ids = get_choice_token_ids(tokenizer, device, num_classes)
     adapter_head = _inspect_adapter_head(args.map_adapter_dir, num_classes)
     print(
@@ -997,23 +1111,60 @@ def main() -> None:
         if prior_raw is None:
             raise RuntimeError("Prior validation split resolved to None.")
 
-    iid_train = _add_seq_len(preprocess_task(args.task_name, train_raw_fit, tokenizer, args.max_length, pad_to_max_length=False))
-    iid_prior = _add_seq_len(preprocess_task(args.task_name, prior_raw, tokenizer, args.max_length, pad_to_max_length=False))
-    iid_test = _add_seq_len(preprocess_task(args.task_name, test_raw, tokenizer, args.max_length, pad_to_max_length=False))
+    iid_train = _add_seq_len(
+        _preprocess_laplace_task(
+            args.task_name,
+            train_raw_fit,
+            tokenizer,
+            args.max_length,
+            bayesian_peft_arc_style=bayesian_peft_arc_style,
+        )
+    )
+    iid_prior = _add_seq_len(
+        _preprocess_laplace_task(
+            args.task_name,
+            prior_raw,
+            tokenizer,
+            args.max_length,
+            bayesian_peft_arc_style=bayesian_peft_arc_style,
+        )
+    )
+    iid_test = _add_seq_len(
+        _preprocess_laplace_task(
+            args.task_name,
+            test_raw,
+            tokenizer,
+            args.max_length,
+            bayesian_peft_arc_style=bayesian_peft_arc_style,
+        )
+    )
 
     eval_tasks = _parse_eval_tasks(args.eval_tasks, args.task_name)
     eval_task_to_proc: Dict[str, object] = {args.task_name: iid_test}
     for eval_task in eval_tasks:
         if eval_task == args.task_name:
             continue
-        eval_num_classes = get_task_num_classes(eval_task)
+        eval_num_classes = _task_num_classes(
+            eval_task,
+            bayesian_peft_arc_style and _is_arc_task(eval_task),
+        )
         if eval_num_classes != num_classes:
             raise ValueError(
                 f"Eval task {eval_task!r} has {eval_num_classes} classes, "
                 f"but source task {args.task_name!r} has {num_classes}."
             )
         eval_raw = load_eval_dataset(eval_task)
-        eval_task_to_proc[eval_task] = _add_seq_len(preprocess_task(eval_task, eval_raw, tokenizer, args.max_length, pad_to_max_length=False))
+        eval_task_to_proc[eval_task] = _add_seq_len(
+            _preprocess_laplace_task(
+                eval_task,
+                eval_raw,
+                tokenizer,
+                args.max_length,
+                bayesian_peft_arc_style=(
+                    bayesian_peft_arc_style and _is_arc_task(eval_task)
+                ),
+            )
+        )
 
     eval_collator = DynamicEvalCollator(
         tokenizer=tokenizer,
@@ -1040,7 +1191,8 @@ def main() -> None:
     fit_loader = _make_loader(iid_train, int(args.fit_bsz), shuffle=fit_shuffle, drop_last=False)
     prior_loader = _make_loader(iid_prior, int(args.per_device_eval_batch_size), shuffle=False, drop_last=False)
 
-    subset_tag = f"official_source_{head_cache_tag}_{args.laplace_sub}"
+    dataset_style_tag = "bp_arc5" if bayesian_peft_arc_style else "seq_mcqa"
+    subset_tag = f"official_source_{head_cache_tag}_{dataset_style_tag}_{args.laplace_sub}"
     prior_mode = "valsplit" if (args.task_name == SCIENCEQA_CURRIC_TASK_NAME or args.testing_set == "val") else "trainvalsplit"
     fit_cache_path = os.path.join(
         args.output_dir,
