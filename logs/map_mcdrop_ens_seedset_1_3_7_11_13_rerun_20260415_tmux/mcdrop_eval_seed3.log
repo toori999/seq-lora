@@ -1,0 +1,62 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+[Seed] requested --seed=3, but MCDrop internal seed is fixed to 0 for benchmark consistency.
+Using device: cuda amp_dtype: torch.bfloat16
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 12723.35it/s]
+[Head] trimmed lm_head to 4 choice logits
+[TIME] LOAD-STAGE MCDrop on scienceqa_closedchoice_grade2_11: 6.05 sec (0.10 min)
+[PEAK] LOAD-STAGE MCDrop on scienceqa_closedchoice_grade2_11: alloc=15.26 GB  reserved=15.43 GB
+
+========================
+      MCDROP ONLY       
+========================
+[Config] MC_SAMPLES=32 TEMP=1.0
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[TIME] INFER MCDrop on scienceqa_closedchoice_grade2_11(test): 361.88 sec (6.03 min)
+[PEAK] INFER MCDrop on scienceqa_closedchoice_grade2_11(test): alloc=14.59 GB  reserved=16.38 GB
+
+[scienceqa_closedchoice_grade2_11(test)][MCDROP]
+  NLL=0.1871  ACC=94.52%  ECE=3.54%  Brier=0.0863  std=0.0014  mc=32
+[TIME] INFER MCDrop on scienceqa_closedchoice_grade12(ood): 74.88 sec (1.25 min)
+[PEAK] INFER MCDrop on scienceqa_closedchoice_grade12(ood): alloc=14.58 GB  reserved=16.38 GB
+
+[scienceqa_closedchoice_grade12(ood)][MCDROP]
+  NLL=0.3440  ACC=93.23%  ECE=6.02%  Brier=0.1204  std=0.0015  mc=32
+
+=== Loading Dataset for Task: obqa ===
+[TIME] INFER MCDrop on obqa(ood): 81.63 sec (1.36 min)
+[PEAK] INFER MCDrop on obqa(ood): alloc=14.38 GB  reserved=15.74 GB
+
+[obqa(ood)][MCDROP]
+  NLL=0.5472  ACC=88.20%  ECE=9.02%  Brier=0.2018  std=0.0024  mc=32
+
+=== Loading Dataset for Task: arc-c ===
+[TIME] INFER MCDrop on arc-c(ood): 272.62 sec (4.54 min)
+[PEAK] INFER MCDrop on arc-c(ood): alloc=14.59 GB  reserved=16.61 GB
+
+[arc-c(ood)][MCDROP]
+  NLL=0.4219  ACC=91.21%  ECE=7.18%  Brier=0.1524  std=0.0011  mc=32
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[TIME] INFER MCDrop on mmlu_science_high(ood): 202.12 sec (3.37 min)
+[PEAK] INFER MCDrop on mmlu_science_high(ood): alloc=14.82 GB  reserved=18.01 GB
+
+[mmlu_science_high(ood)][MCDROP]
+  NLL=0.8050  ACC=81.33%  ECE=12.71%  Brier=0.3011  std=0.0036  mc=32
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[TIME] INFER MCDrop on mmlu_science_college(ood): 101.49 sec (1.69 min)
+[PEAK] INFER MCDrop on mmlu_science_college(ood): alloc=14.77 GB  reserved=18.01 GB
+
+[mmlu_science_college(ood)][MCDROP]
+  NLL=1.0366  ACC=73.12%  ECE=15.53%  Brier=0.4107  std=0.0043  mc=32
+[TIME] INFER MCDrop on gpqa_main(ood): 269.88 sec (4.50 min)
+[PEAK] INFER MCDrop on gpqa_main(ood): alloc=15.16 GB  reserved=19.50 GB
+
+[gpqa_main(ood)][MCDROP]
+  NLL=1.9824  ACC=36.16%  ECE=34.21%  Brier=0.8959  std=0.0090  mc=32

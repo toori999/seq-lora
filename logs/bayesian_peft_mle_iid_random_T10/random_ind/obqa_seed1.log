@@ -1,0 +1,55 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using device: cuda
+[Protocol] eval_protocol=bayesian_peft
+[Curvature backend] Using ASDL Kron on the full wrapper graph with randomized PSD low-rank compression for large blocks.
+[KFAC] disable_dropout_during_kfac_mu=True
+
+[Load] base_model = meta-llama/Llama-2-7b-hf
+[Load] adapter    = bayesian-peft/checkpoints/mle/meta-llama/Llama-2-7b-hf/obqa/lora-obqa-lr5e-5-bs4-drop0.1-step2000-seed1
+[Protocol] tokenizer.add_eos_token=False
+[Protocol] using direct bayesian-peft dataset wrapper for source task obqa
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights:   0%|          | 1/291 [00:00<00:31,  9.13it/s]Loading weights:  16%|█▌        | 47/291 [00:00<00:00, 262.12it/s]Loading weights:  26%|██▌       | 75/291 [00:00<00:01, 162.28it/s]Loading weights:  35%|███▌      | 103/291 [00:00<00:01, 176.92it/s]Loading weights:  45%|████▌     | 132/291 [00:00<00:00, 205.97it/s]Loading weights:  54%|█████▎    | 156/291 [00:00<00:00, 179.95it/s]Loading weights:  61%|██████    | 177/291 [00:01<00:00, 141.44it/s]Loading weights:  67%|██████▋   | 194/291 [00:01<00:00, 146.04it/s]Loading weights:  74%|███████▎  | 214/291 [00:01<00:00, 156.34it/s]Loading weights:  81%|████████  | 236/291 [00:01<00:00, 169.03it/s]Loading weights:  88%|████████▊ | 257/291 [00:01<00:00, 177.95it/s]Loading weights:  96%|█████████▌| 280/291 [00:01<00:00, 190.21it/s]Loading weights: 100%|██████████| 291/291 [00:01<00:00, 174.92it/s]
+[Head] keeping full-vocab lm_head (bayesian_peft protocol)
+[Adapter] loaded legacy checkpoint keys=131 remapped=131
+
+[Setup] Casting all LoRA params to float32 for numerical stability...
+[Slices] source=task_train_split[random_10_slices_seed_1] natural_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9] order=sorted order_seed=0 run_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[KFAC] prepared 10 slices from task_train_split[random_10_slices_seed_1]; samples=4957 batches=1240 drop_last=False
+[Posterior Stats Cache] loaded from caches/bayesian_peft_mle_iid_random_T10/obqa_seed1_stats.pt (modules=65 T=10)
+
+=== Independent Slice Ensemble Posterior ===
+[Independent Ensemble] modules=65 T=10 samples_per_slice=10 total_samples=100 prior=P1=1 no_Kalman no_Q
+[TIME] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on obqa: 11.93 sec (0.20 min)
+[PEAK] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on obqa: alloc=13.08 GB  reserved=13.11 GB
+[Tau auto] anchor source=train rows=500 batch_size=96 mc_samples=32
+
+=== Auto-selecting posterior_tau by direct anchor KL estimate ===
+[Tau auto] baseline tau=0.000000 Acc0=88.40% NLL0=0.369102 KL0=0.000612
+[Tau auto] target: 0.050000 <= KL_tau <= 0.052500 (direct_target=0.050000, acc floor logged only: 87.40%) using KL(tau) ~= C * tau^2 within [0, 1.000000]
+[Tau auto] probe tau=0.500000 acc=88.40% nll=0.384715 kl=0.014768 accuracy_ok=1 kl_in_window=0
+[Tau auto] direct estimate from probe: tau=0.920000 = 0.500000 * sqrt(0.050000 / 0.014768)
+[Tau auto] direct tau=0.920000 acc=88.40% nll=0.437889 kl=0.066832 accuracy_ok=1 kl_in_window=0
+[Tau auto] one-step KL refinement: tau=0.795757 = 0.920000 * sqrt(0.050000 / 0.066832)
+[Tau auto] refined tau=0.795757 acc=88.20% nll=0.417794 kl=0.046920 accuracy_ok=1 kl_in_window=0
+[Tau auto] linear KL interpolation: tau=0.814978 from (0.795757, kl=0.046920) to (0.920000, kl=0.066832) target_kl=0.050000; selecting without extra eval
+[Tau auto] selected posterior_tau=0.814978 source=interp_linear_kl_no_eval anchor_acc=88.20% anchor_nll=0.417794 anchor_kl=0.050000 kl_window=[0.050000, 0.052500]
+[TIME] FIT Seq-LoRA tau on obqa(train_anchor): 422.80 sec (7.05 min)
+[PEAK] FIT Seq-LoRA tau on obqa(train_anchor): alloc=14.12 GB  reserved=15.43 GB
+[Tau] mode=auto effective_posterior_tau=0.814978
+
+=== Evaluation: source=obqa | targets=['obqa'] ===
+[TIME] INFER Seq-LoRA on obqa_iid: 420.80 sec (7.01 min)
+[PEAK] INFER Seq-LoRA on obqa_iid: alloc=14.29 GB  reserved=14.82 GB
+
+[obqa_iid]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.5963
+  brier_bayes: 0.3162
+  ece_bayes: 5.28%
+  acc_bayes: 77.40%
+  kl_map_to_bayes: 0.047095
+  posterior_tau: 0.814978
+  [bayesian-peft style] val_acc: 0.7739999890327454, val_ece: 0.052785322070121765, val_nll: 0.5963436717987061, val_brier: 0.3162237024307251
+  [Timing] Bayes sampling: 420.799s
+
+[Done] Evaluation complete for source task obqa.

@@ -1,0 +1,245 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using device: cuda
+[Curvature backend] Using ASDL Kron on the full wrapper graph with randomized PSD low-rank compression for large blocks.
+[KFAC] disable_dropout_during_kfac_mu=True
+
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 7422.36it/s]
+[Head] trimmed lm_head to 4 choice logits
+Map:   0%|          | 0/5991 [00:00<?, ? examples/s]Map:  83%|████████▎ | 5000/5991 [00:00<00:00, 34514.77 examples/s]Map: 100%|██████████| 5991/5991 [00:00<00:00, 33583.18 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter:  83%|████████▎ | 5000/5991 [00:00<00:00, 42280.69 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 43263.10 examples/s]
+Flattening the indices:   0%|          | 0/5991 [00:00<?, ? examples/s]Flattening the indices: 100%|██████████| 5991/5991 [00:00<00:00, 80531.48 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 56585.97 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 56055.67 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 55917.08 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 55494.38 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 56292.13 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 55825.78 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 55403.10 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 54899.31 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 54589.11 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 54142.15 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 56167.94 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 55746.88 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 55561.00 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 55147.39 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 56739.94 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 56238.33 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 56075.69 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 55700.42 examples/s]
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 57200.65 examples/s]Filter: 100%|██████████| 5991/5991 [00:00<00:00, 56631.37 examples/s]
+[KFAC] prepared 10 slices from slices_dir=slice_data/scienceqa_slice_ablation_controls/reverse_grade/seed_3/kfac_balanced; samples=5991 batches=1500 drop_last=False
+[KFAC] posterior stage ready
+[KFAC] slice 1/10 sid=0 batches=85
+[KFAC] slice 1/10 done
+[KFAC] slice 2/10 sid=1 batches=85
+[KFAC] slice 2/10 done
+[KFAC] slice 3/10 sid=2 batches=70
+[KFAC] slice 3/10 done
+[KFAC] slice 4/10 sid=3 batches=133
+[KFAC] slice 4/10 done
+[KFAC] slice 5/10 sid=4 batches=182
+[KFAC] slice 5/10 done
+[KFAC] slice 6/10 sid=5 batches=140
+[KFAC] slice 6/10 done
+[KFAC] slice 7/10 sid=6 batches=205
+[KFAC] slice 7/10 done
+[KFAC] slice 8/10 sid=7 batches=239
+[KFAC] slice 8/10 done
+[KFAC] slice 9/10 sid=8 batches=213
+[KFAC] slice 9/10 done
+[KFAC] slice 10/10 sid=9 batches=148
+[KFAC] slice 10/10 done
+
+=== Kalman Filter Only (module-wise) ===
+[Kalman] modules=73 L_total=4672
+
+Directly sampling final posterior (t=T): S=32
+
+=== Module-Constant Q Report ===
+[Module Q] mode=module_constant  estimator=curvature_normalized_mu_drift_prior  exposed scale s_Q=1.000000  beta=0.050  drift_m=median_t median_l ((delta_mu_l)^2 diag(Hbar_m)_l)  Q_t^(m)=s_Q*q_m*I
+[Module Q Summary] scale(min=0.555302 mean=0.964613 max=1.461485)
+[Module Q Per Module]
+  base_model.model.lm_head.lora_A.default: q_scale=0.884985 q_diag=0.884985
+  base_model.model.model.layers.0.self_attn.q_proj.lora_A.default: q_scale=0.718203 q_diag=0.718203
+  base_model.model.model.layers.0.self_attn.v_proj.lora_A.default: q_scale=0.611577 q_diag=0.611577
+  base_model.model.model.layers.1.self_attn.q_proj.lora_A.default: q_scale=0.566231 q_diag=0.566231
+  base_model.model.model.layers.1.self_attn.v_proj.lora_A.default: q_scale=0.958278 q_diag=0.958278
+  base_model.model.model.layers.10.self_attn.q_proj.lora_A.default: q_scale=1.052650 q_diag=1.052650
+  base_model.model.model.layers.10.self_attn.v_proj.lora_A.default: q_scale=1.116441 q_diag=1.116441
+  base_model.model.model.layers.11.self_attn.q_proj.lora_A.default: q_scale=1.000000 q_diag=1.000000
+  base_model.model.model.layers.11.self_attn.v_proj.lora_A.default: q_scale=1.130844 q_diag=1.130844
+  base_model.model.model.layers.12.self_attn.q_proj.lora_A.default: q_scale=1.050517 q_diag=1.050517
+  base_model.model.model.layers.12.self_attn.v_proj.lora_A.default: q_scale=1.154424 q_diag=1.154424
+  base_model.model.model.layers.13.self_attn.q_proj.lora_A.default: q_scale=0.970344 q_diag=0.970344
+  base_model.model.model.layers.13.self_attn.v_proj.lora_A.default: q_scale=1.160528 q_diag=1.160528
+  base_model.model.model.layers.14.self_attn.q_proj.lora_A.default: q_scale=1.093962 q_diag=1.093962
+  base_model.model.model.layers.14.self_attn.v_proj.lora_A.default: q_scale=0.656928 q_diag=0.656928
+  base_model.model.model.layers.15.self_attn.q_proj.lora_A.default: q_scale=1.152958 q_diag=1.152958
+  base_model.model.model.layers.15.self_attn.v_proj.lora_A.default: q_scale=1.281225 q_diag=1.281225
+  base_model.model.model.layers.16.self_attn.q_proj.lora_A.default: q_scale=0.555302 q_diag=0.555302
+  base_model.model.model.layers.16.self_attn.v_proj.lora_A.default: q_scale=1.104181 q_diag=1.104181
+  base_model.model.model.layers.17.self_attn.q_proj.lora_A.default: q_scale=1.045201 q_diag=1.045201
+  base_model.model.model.layers.17.self_attn.v_proj.lora_A.default: q_scale=1.110384 q_diag=1.110384
+  base_model.model.model.layers.18.self_attn.q_proj.lora_A.default: q_scale=1.461485 q_diag=1.461485
+  base_model.model.model.layers.18.self_attn.v_proj.lora_A.default: q_scale=0.603089 q_diag=0.603089
+  base_model.model.model.layers.19.self_attn.q_proj.lora_A.default: q_scale=0.927921 q_diag=0.927921
+  base_model.model.model.layers.19.self_attn.v_proj.lora_A.default: q_scale=1.106586 q_diag=1.106586
+  base_model.model.model.layers.2.self_attn.q_proj.lora_A.default: q_scale=0.660751 q_diag=0.660751
+  base_model.model.model.layers.2.self_attn.v_proj.lora_A.default: q_scale=1.023454 q_diag=1.023454
+  base_model.model.model.layers.20.self_attn.q_proj.lora_A.default: q_scale=1.125269 q_diag=1.125269
+  base_model.model.model.layers.20.self_attn.v_proj.lora_A.default: q_scale=1.021720 q_diag=1.021720
+  base_model.model.model.layers.21.self_attn.q_proj.lora_A.default: q_scale=1.303845 q_diag=1.303845
+  base_model.model.model.layers.21.self_attn.v_proj.lora_A.default: q_scale=1.183896 q_diag=1.183896
+  base_model.model.model.layers.22.self_attn.q_proj.lora_A.default: q_scale=1.167213 q_diag=1.167213
+  base_model.model.model.layers.22.self_attn.v_proj.lora_A.default: q_scale=1.080299 q_diag=1.080299
+  base_model.model.model.layers.23.self_attn.q_proj.lora_A.default: q_scale=1.050004 q_diag=1.050004
+  base_model.model.model.layers.23.self_attn.v_proj.lora_A.default: q_scale=1.111229 q_diag=1.111229
+  base_model.model.model.layers.24.self_attn.q_proj.lora_A.default: q_scale=1.162850 q_diag=1.162850
+  base_model.model.model.layers.24.self_attn.v_proj.lora_A.default: q_scale=1.044538 q_diag=1.044538
+  base_model.model.model.layers.25.self_attn.q_proj.lora_A.default: q_scale=0.912436 q_diag=0.912436
+  base_model.model.model.layers.25.self_attn.v_proj.lora_A.default: q_scale=1.016193 q_diag=1.016193
+  base_model.model.model.layers.26.self_attn.q_proj.lora_A.default: q_scale=1.003784 q_diag=1.003784
+  base_model.model.model.layers.26.self_attn.v_proj.lora_A.default: q_scale=0.949432 q_diag=0.949432
+  base_model.model.model.layers.27.self_attn.q_proj.lora_A.default: q_scale=0.911568 q_diag=0.911568
+  base_model.model.model.layers.27.self_attn.v_proj.lora_A.default: q_scale=1.170622 q_diag=1.170622
+  base_model.model.model.layers.28.self_attn.q_proj.lora_A.default: q_scale=1.021010 q_diag=1.021010
+  base_model.model.model.layers.28.self_attn.v_proj.lora_A.default: q_scale=1.121407 q_diag=1.121407
+  base_model.model.model.layers.29.self_attn.q_proj.lora_A.default: q_scale=0.991344 q_diag=0.991344
+  base_model.model.model.layers.29.self_attn.v_proj.lora_A.default: q_scale=0.981742 q_diag=0.981742
+  base_model.model.model.layers.3.self_attn.q_proj.lora_A.default: q_scale=0.614100 q_diag=0.614100
+  base_model.model.model.layers.3.self_attn.v_proj.lora_A.default: q_scale=1.025832 q_diag=1.025832
+  base_model.model.model.layers.30.self_attn.q_proj.lora_A.default: q_scale=0.954364 q_diag=0.954364
+  base_model.model.model.layers.30.self_attn.v_proj.lora_A.default: q_scale=0.956837 q_diag=0.956837
+  base_model.model.model.layers.31.self_attn.q_proj.lora_A.default: q_scale=0.836669 q_diag=0.836669
+  base_model.model.model.layers.31.self_attn.v_proj.lora_A.default: q_scale=0.912001 q_diag=0.912001
+  base_model.model.model.layers.32.self_attn.q_proj.lora_A.default: q_scale=0.996417 q_diag=0.996417
+  base_model.model.model.layers.32.self_attn.v_proj.lora_A.default: q_scale=0.978033 q_diag=0.978033
+  base_model.model.model.layers.33.self_attn.q_proj.lora_A.default: q_scale=1.010234 q_diag=1.010234
+  base_model.model.model.layers.33.self_attn.v_proj.lora_A.default: q_scale=0.879528 q_diag=0.879528
+  base_model.model.model.layers.34.self_attn.q_proj.lora_A.default: q_scale=0.876273 q_diag=0.876273
+  base_model.model.model.layers.34.self_attn.v_proj.lora_A.default: q_scale=0.984044 q_diag=0.984044
+  base_model.model.model.layers.35.self_attn.q_proj.lora_A.default: q_scale=0.934446 q_diag=0.934446
+  base_model.model.model.layers.35.self_attn.v_proj.lora_A.default: q_scale=0.935375 q_diag=0.935375
+  base_model.model.model.layers.4.self_attn.q_proj.lora_A.default: q_scale=0.560985 q_diag=0.560985
+  base_model.model.model.layers.4.self_attn.v_proj.lora_A.default: q_scale=1.078967 q_diag=1.078967
+  base_model.model.model.layers.5.self_attn.q_proj.lora_A.default: q_scale=0.811321 q_diag=0.811321
+  base_model.model.model.layers.5.self_attn.v_proj.lora_A.default: q_scale=0.835628 q_diag=0.835628
+  base_model.model.model.layers.6.self_attn.q_proj.lora_A.default: q_scale=0.650279 q_diag=0.650279
+  base_model.model.model.layers.6.self_attn.v_proj.lora_A.default: q_scale=0.618063 q_diag=0.618063
+  base_model.model.model.layers.7.self_attn.q_proj.lora_A.default: q_scale=0.568461 q_diag=0.568461
+  base_model.model.model.layers.7.self_attn.v_proj.lora_A.default: q_scale=1.042053 q_diag=1.042053
+  base_model.model.model.layers.8.self_attn.q_proj.lora_A.default: q_scale=0.868390 q_diag=0.868390
+  base_model.model.model.layers.8.self_attn.v_proj.lora_A.default: q_scale=1.026174 q_diag=1.026174
+  base_model.model.model.layers.9.self_attn.q_proj.lora_A.default: q_scale=0.948839 q_diag=0.948839
+  base_model.model.model.layers.9.self_attn.v_proj.lora_A.default: q_scale=1.024550 q_diag=1.024550
+[TIME] TRAIN-STAGE Seq-LoRA posterior build on scienceqa_closedchoice_grade2_11: 797.28 sec (13.29 min)
+[PEAK] TRAIN-STAGE Seq-LoRA posterior build on scienceqa_closedchoice_grade2_11: alloc=23.77 GB  reserved=25.79 GB
+[Tau auto] anchor source=train rows=500 batch_size=256 mc_samples=32
+
+=== Auto-selecting posterior_tau by direct anchor KL estimate ===
+[Tau auto] baseline tau=0.000000 Acc0=95.40% NLL0=0.114756 KL0=0.000056
+[Tau auto] target: 0.050000 <= KL_tau <= 0.052500 (direct_target=0.050000, acc floor logged only: 94.40%) using KL(tau) ~= C * tau^2 within [0, 1.000000]
+[Tau auto] probe tau=0.500000 acc=95.20% nll=0.119321 kl=0.033549 accuracy_ok=1 kl_in_window=0
+[Tau auto] direct estimate from probe: tau=0.610401 = 0.500000 * sqrt(0.050000 / 0.033549)
+[Tau auto] direct tau=0.610401 acc=95.20% nll=0.132952 kl=0.052815 accuracy_ok=1 kl_in_window=0
+[Tau auto] one-step KL refinement: tau=0.593913 = 0.610401 * sqrt(0.050000 / 0.052815)
+[Tau auto] refined tau=0.593913 acc=95.20% nll=0.130739 kl=0.049843 accuracy_ok=1 kl_in_window=0
+[Tau auto] linear KL interpolation: tau=0.594783 from (0.593913, kl=0.049843) to (0.610401, kl=0.052815) target_kl=0.050000; selecting without extra eval
+[Tau auto] selected posterior_tau=0.594783 source=interp_linear_kl_no_eval anchor_acc=95.20% anchor_nll=0.130739 anchor_kl=0.050000 kl_window=[0.050000, 0.052500]
+[TIME] FIT Seq-LoRA tau on scienceqa_closedchoice_grade2_11(train_anchor): 532.87 sec (8.88 min)
+[PEAK] FIT Seq-LoRA tau on scienceqa_closedchoice_grade2_11(train_anchor): alloc=21.97 GB  reserved=25.90 GB
+[Tau] mode=auto effective_posterior_tau=0.594783
+
+=== Evaluation: source=scienceqa_closedchoice_grade2_11 | targets=['scienceqa_closedchoice_grade2_11', 'scienceqa_closedchoice_grade12', 'obqa', 'arc-c', 'mmlu_science_high', 'mmlu_science_college', 'gpqa_main'] ===
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[TIME] INFER Seq-LoRA on scienceqa_closedchoice_grade2_11_iid: 396.81 sec (6.61 min)
+[PEAK] INFER Seq-LoRA on scienceqa_closedchoice_grade2_11_iid: alloc=17.82 GB  reserved=24.64 GB
+
+[scienceqa_closedchoice_grade2_11_iid]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.1491
+  brier_bayes: 0.0880
+  ece_bayes: 1.32%
+  acc_bayes: 93.70%
+  kl_map_to_bayes: 0.049113
+  posterior_tau: 0.594783
+  [Timing] Bayes sampling: 396.802s
+[TIME] INFER Seq-LoRA on scienceqa_closedchoice_grade12_ood: 93.18 sec (1.55 min)
+[PEAK] INFER Seq-LoRA on scienceqa_closedchoice_grade12_ood: alloc=18.01 GB  reserved=19.67 GB
+
+[scienceqa_closedchoice_grade12_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.2699
+  brier_bayes: 0.1586
+  ece_bayes: 4.97%
+  acc_bayes: 88.71%
+  kl_map_to_bayes: 0.133360
+  posterior_tau: 0.594783
+  [Timing] Bayes sampling: 93.176s
+
+=== Loading Dataset for Task: obqa ===
+[TIME] INFER Seq-LoRA on obqa_ood: 90.95 sec (1.52 min)
+[PEAK] INFER Seq-LoRA on obqa_ood: alloc=17.57 GB  reserved=19.20 GB
+
+[obqa_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.3401
+  brier_bayes: 0.1745
+  ece_bayes: 3.82%
+  acc_bayes: 86.40%
+  kl_map_to_bayes: 0.083312
+  posterior_tau: 0.594783
+  [Timing] Bayes sampling: 90.947s
+
+=== Loading Dataset for Task: arc-c ===
+[TIME] INFER Seq-LoRA on arc-c_ood: 303.81 sec (5.06 min)
+[PEAK] INFER Seq-LoRA on arc-c_ood: alloc=17.90 GB  reserved=23.38 GB
+
+[arc-c_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.2442
+  brier_bayes: 0.1244
+  ece_bayes: 2.02%
+  acc_bayes: 91.53%
+  kl_map_to_bayes: 0.049972
+  posterior_tau: 0.594783
+  [Timing] Bayes sampling: 303.800s
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[TIME] INFER Seq-LoRA on mmlu_science_high_ood: 186.51 sec (3.11 min)
+[PEAK] INFER Seq-LoRA on mmlu_science_high_ood: alloc=18.08 GB  reserved=21.66 GB
+
+[mmlu_science_high_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.5587
+  brier_bayes: 0.2724
+  ece_bayes: 4.87%
+  acc_bayes: 82.38%
+  kl_map_to_bayes: 0.094429
+  posterior_tau: 0.594783
+  [Timing] Bayes sampling: 186.500s
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[TIME] INFER Seq-LoRA on mmlu_science_college_ood: 96.55 sec (1.61 min)
+[PEAK] INFER Seq-LoRA on mmlu_science_college_ood: alloc=17.87 GB  reserved=19.44 GB
+
+[mmlu_science_college_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.7549
+  brier_bayes: 0.3766
+  ece_bayes: 7.83%
+  acc_bayes: 72.54%
+  kl_map_to_bayes: 0.082783
+  posterior_tau: 0.594783
+  [Timing] Bayes sampling: 96.542s
+[TIME] INFER Seq-LoRA on gpqa_main_ood: 252.12 sec (4.20 min)
+[PEAK] INFER Seq-LoRA on gpqa_main_ood: alloc=18.90 GB  reserved=22.86 GB
+
+[gpqa_main_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 1.5781
+  brier_bayes: 0.8078
+  ece_bayes: 22.22%
+  acc_bayes: 34.82%
+  kl_map_to_bayes: 0.110103
+  posterior_tau: 0.594783
+  [Timing] Bayes sampling: 252.113s
+
+[Done] Evaluation complete for source task scienceqa_closedchoice_grade2_11.

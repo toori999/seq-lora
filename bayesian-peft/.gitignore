@@ -1,0 +1,16 @@
+__pycache__/
+stashed/
+playground*.ipynb
+*.swp
+*.gif
+*.pdf
+data/
+checkpoints/
+*.png
+wandb
+*.csv
+*.pkl
+tmp/
+*/__pycache__
+*.pyc
+utils/cal.py

@@ -1,0 +1,204 @@
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+=====================================
+Loaded benchmark_mcdataset source=obqa eval=iid,arc-e,arc-c,mmlu-h,mmlu-c
+=====================================
+
+=== Loading Dataset for Task: obqa ===
+
+=== Loading Dataset for Task: obqa ===
+[benchmark_mcdataset] train=4957 anchor=500(train) source_eval=500(obqa:test) eval_tasks=['obqa', 'arc-e', 'arc-c', 'mmlu_science_high', 'mmlu_science_college'] train_bsz=8 eval_bsz=48
+Namespace(seed=7, evaluate=False, checkpoint=False, checkpoint_name='default', nowand=True, wandb_entity='<your_wandb_account>', wandb_project='Bayes LoRA', wandb_name='', dataset='obqa', dataset_type='benchmark_mcdataset', max_seq_len=300, modelwrapper='tfblora', model='Qwen/Qwen3-8B-Base', model_type='causallm', load_in_8bit=False, loss='nll', n_epochs=0, max_train_steps=0, eval_per_steps=500, early_stop_steps=0, batch_size=8, eval_batch_size=48, lr=0.0001, opt='adamw', opt_wd=0.0, warmup_ratio=0, adam_epsilon=1e-06, use_slow_tokenizer=False, add_space=False, is_s2s=False, pad_to_max_length=False, eval_steps=0, num_bins=10, load_model_path=None, load_lora_path='iid_qwen35_8b_obqa_lora_map_leftpad/obqa_qv_lmhead_leftpad/seed_7/map_step_2000', shared_init_lora_path=None, save_blob_dir=None, load_blob_dir=None, load_lora_huggingface_repo=None, log_path='thirdparty_tfb_obqa_seed7_5eval_mc32', testing_set='train_train_test', ood_ori_dataset=None, eval_dataset='iid,arc-e,arc-c,mmlu-h,mmlu-c', anchor_size=500, lora_r=8, lora_alpha=16, lora_dropout=0.05, apply_classhead_lora=True, apply_qkv_head_lora=False, bayes_train_n_samples=10, bayes_eval_n_samples=1, bayes_eval_n_samples_final=32, bayes_eps=0.05, bayes_gamma=8, bayes_kllr=0.02, bayes_beta=0.015, bayes_final_beta=0.18, bayes_flipout=True, bayes_inference_notsample=False, bayes_klreweighting=False, th=0.003, iter=5, conf_jobnum='17be84b8-98e1-4ac1-b2aa-f85e146b590c', conf_timestamp='2026-04-17 20:59:18.298009', conf_host='tori', outdim=4, num_samples=4957)
+
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 9391.87it/s]
+[Head] trimmed lm_head to 4 choice logits
+LoRA Model loaded successfully from local path: iid_qwen35_8b_obqa_lora_map_leftpad/obqa_qv_lmhead_leftpad/seed_7/map_step_2000
+=====================
+trainable params: 6,225,936 || all params: 7,574,647,824 || trainable%: 0.0822
+len(train_loader): 619
+num of epochs: 0
+[TIME] LOAD-STAGE TFBLORA on obqa: 10.98 sec (0.18 min)
+[PEAK] LOAD-STAGE TFBLORA on obqa: alloc=14.12 GB  reserved=14.26 GB
+[TFB-FIT] starting anchor sweep: beta_upper=0.015000
+[PROGRESS] TFB anchor sweep: 1/11 (9.1%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 2/11 (18.2%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 3/11 (27.3%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 4/11 (36.4%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 5/11 (45.5%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 6/11 (54.5%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 7/11 (63.6%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 8/11 (72.7%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 9/11 (81.8%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 10/11 (90.9%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 11/11 (100.0%)  beta=0.000000
+[TFB-FIT] binary-search iter 1/5: beta=0.008000 range=(0.001000, 0.015000)
+[PROGRESS] TFB fit iter 1/5: 1/11 (9.1%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 2/11 (18.2%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 3/11 (27.3%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 4/11 (36.4%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 5/11 (45.5%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 6/11 (54.5%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 7/11 (63.6%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 8/11 (72.7%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 9/11 (81.8%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 10/11 (90.9%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 11/11 (100.0%)  beta=0.008000
+[TFB-FIT] NLL Loss change ratio: 6.288275862068966%
+=====================
+[TFB-FIT] binary-search iter 2/5: beta=0.004500 range=(0.001000, 0.008000)
+[PROGRESS] TFB fit iter 2/5: 1/11 (9.1%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 2/11 (18.2%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 3/11 (27.3%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 4/11 (36.4%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 5/11 (45.5%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 6/11 (54.5%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 7/11 (63.6%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 8/11 (72.7%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 9/11 (81.8%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 10/11 (90.9%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 11/11 (100.0%)  beta=0.004500
+[TFB-FIT] NLL Loss change ratio: 1.433103448275862%
+=====================
+[TFB-FIT] binary-search iter 3/5: beta=0.002750 range=(0.001000, 0.004500)
+[PROGRESS] TFB fit iter 3/5: 1/11 (9.1%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 2/11 (18.2%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 3/11 (27.3%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 4/11 (36.4%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 5/11 (45.5%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 6/11 (54.5%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 7/11 (63.6%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 8/11 (72.7%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 9/11 (81.8%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 10/11 (90.9%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 11/11 (100.0%)  beta=0.002750
+[TFB-FIT] NLL Loss change ratio: 0.3406896551724138%
+=====================
+[TFB-FIT] binary-search iter 4/5: beta=0.001875 range=(0.001000, 0.002750)
+[PROGRESS] TFB fit iter 4/5: 1/11 (9.1%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 2/11 (18.2%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 3/11 (27.3%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 4/11 (36.4%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 5/11 (45.5%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 6/11 (54.5%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 7/11 (63.6%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 8/11 (72.7%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 9/11 (81.8%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 10/11 (90.9%)  beta=0.001875
+[PROGRESS] TFB fit iter 4/5: 11/11 (100.0%)  beta=0.001875
+[TFB-FIT] NLL Loss change ratio: 0.1006896551724138%
+=====================
+[TFB-FIT] binary-search iter 5/5: beta=0.002313 range=(0.001875, 0.002750)
+[PROGRESS] TFB fit iter 5/5: 1/11 (9.1%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 2/11 (18.2%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 3/11 (27.3%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 4/11 (36.4%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 5/11 (45.5%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 6/11 (54.5%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 7/11 (63.6%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 8/11 (72.7%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 9/11 (81.8%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 10/11 (90.9%)  beta=0.002313
+[PROGRESS] TFB fit iter 5/5: 11/11 (100.0%)  beta=0.002313
+[TFB-FIT] NLL Loss change ratio: 0.21103448275862072%
+=====================
+[TFB-FIT] Optimal bayes_beta: 0.0027500000000000003
+[Save] TFB fit info -> checkpoints/tfblora/Qwen/Qwen3-8B-Base/obqa/thirdparty_tfb_obqa_seed7_5eval_mc32/tfb_fit.json
+[TIME] FIT TFB on obqa(train): 119.34 sec (1.99 min)
+[PEAK] FIT TFB on obqa(train): alloc=14.48 GB  reserved=15.42 GB
+[PROGRESS] TFB eval: 1/11 (9.1%)  mc=32
+[PROGRESS] TFB eval: 2/11 (18.2%)  mc=32
+[PROGRESS] TFB eval: 3/11 (27.3%)  mc=32
+[PROGRESS] TFB eval: 4/11 (36.4%)  mc=32
+[PROGRESS] TFB eval: 5/11 (45.5%)  mc=32
+[PROGRESS] TFB eval: 6/11 (54.5%)  mc=32
+[PROGRESS] TFB eval: 7/11 (63.6%)  mc=32
+[PROGRESS] TFB eval: 8/11 (72.7%)  mc=32
+[PROGRESS] TFB eval: 9/11 (81.8%)  mc=32
+[PROGRESS] TFB eval: 10/11 (90.9%)  mc=32
+[PROGRESS] TFB eval: 11/11 (100.0%)  mc=32
+[TIME] INFER TFB on obqa(test): 76.69 sec (1.28 min)
+[PEAK] INFER TFB on obqa(test): alloc=14.48 GB  reserved=15.42 GB
+
+[obqa(test)][TFB]
+  NLL=0.2862  ACC=91.80%  ECE=4.56%  Brier=0.1325  mc=32  beta=0.002750  std=0.026511  flip_ratio=0.000000
+[benchmark_mcdataset] lazy loading eval task=arc-e
+
+=== Loading Dataset for Task: arc-e ===
+[PROGRESS] TFB eval: 1/50 (2.0%)  mc=32
+[PROGRESS] TFB eval: 5/50 (10.0%)  mc=32
+[PROGRESS] TFB eval: 10/50 (20.0%)  mc=32
+[PROGRESS] TFB eval: 15/50 (30.0%)  mc=32
+[PROGRESS] TFB eval: 20/50 (40.0%)  mc=32
+[PROGRESS] TFB eval: 25/50 (50.0%)  mc=32
+[PROGRESS] TFB eval: 30/50 (60.0%)  mc=32
+[PROGRESS] TFB eval: 35/50 (70.0%)  mc=32
+[PROGRESS] TFB eval: 40/50 (80.0%)  mc=32
+[PROGRESS] TFB eval: 45/50 (90.0%)  mc=32
+[PROGRESS] TFB eval: 50/50 (100.0%)  mc=32
+[TIME] INFER TFB on arc-e(ood): 453.88 sec (7.56 min)
+[PEAK] INFER TFB on arc-e(ood): alloc=14.78 GB  reserved=17.46 GB
+
+[arc-e(ood)][TFB]
+  NLL=0.1109  ACC=97.18%  ECE=0.58%  Brier=0.0482  mc=32  beta=0.002750  std=0.023026  flip_ratio=0.000843
+[benchmark_mcdataset] lazy loading eval task=arc-c
+
+=== Loading Dataset for Task: arc-c ===
+[PROGRESS] TFB eval: 1/25 (4.0%)  mc=32
+[PROGRESS] TFB eval: 2/25 (8.0%)  mc=32
+[PROGRESS] TFB eval: 4/25 (16.0%)  mc=32
+[PROGRESS] TFB eval: 6/25 (24.0%)  mc=32
+[PROGRESS] TFB eval: 8/25 (32.0%)  mc=32
+[PROGRESS] TFB eval: 10/25 (40.0%)  mc=32
+[PROGRESS] TFB eval: 12/25 (48.0%)  mc=32
+[PROGRESS] TFB eval: 14/25 (56.0%)  mc=32
+[PROGRESS] TFB eval: 16/25 (64.0%)  mc=32
+[PROGRESS] TFB eval: 18/25 (72.0%)  mc=32
+[PROGRESS] TFB eval: 20/25 (80.0%)  mc=32
+[PROGRESS] TFB eval: 22/25 (88.0%)  mc=32
+[PROGRESS] TFB eval: 24/25 (96.0%)  mc=32
+[PROGRESS] TFB eval: 25/25 (100.0%)  mc=32
+[TIME] INFER TFB on arc-c(ood): 263.40 sec (4.39 min)
+[PEAK] INFER TFB on arc-c(ood): alloc=14.82 GB  reserved=17.78 GB
+
+[arc-c(ood)][TFB]
+  NLL=0.2461  ACC=92.22%  ECE=3.77%  Brier=0.1218  mc=32  beta=0.002750  std=0.031172  flip_ratio=0.004277
+[benchmark_mcdataset] lazy loading eval task=mmlu_science_high
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[PROGRESS] TFB eval: 1/14 (7.1%)  mc=32
+[PROGRESS] TFB eval: 2/14 (14.3%)  mc=32
+[PROGRESS] TFB eval: 3/14 (21.4%)  mc=32
+[PROGRESS] TFB eval: 4/14 (28.6%)  mc=32
+[PROGRESS] TFB eval: 5/14 (35.7%)  mc=32
+[PROGRESS] TFB eval: 6/14 (42.9%)  mc=32
+[PROGRESS] TFB eval: 7/14 (50.0%)  mc=32
+[PROGRESS] TFB eval: 8/14 (57.1%)  mc=32
+[PROGRESS] TFB eval: 9/14 (64.3%)  mc=32
+[PROGRESS] TFB eval: 10/14 (71.4%)  mc=32
+[PROGRESS] TFB eval: 11/14 (78.6%)  mc=32
+[PROGRESS] TFB eval: 12/14 (85.7%)  mc=32
+[PROGRESS] TFB eval: 13/14 (92.9%)  mc=32
+[PROGRESS] TFB eval: 14/14 (100.0%)  mc=32
+[TIME] INFER TFB on mmlu_science_high(ood): 199.83 sec (3.33 min)
+[PEAK] INFER TFB on mmlu_science_high(ood): alloc=15.22 GB  reserved=19.08 GB
+
+[mmlu_science_high(ood)][TFB]
+  NLL=0.5976  ACC=81.78%  ECE=8.58%  Brier=0.2856  mc=32  beta=0.002750  std=0.065683  flip_ratio=0.019578
+[benchmark_mcdataset] lazy loading eval task=mmlu_science_college
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[PROGRESS] TFB eval: 1/8 (12.5%)  mc=32
+[PROGRESS] TFB eval: 2/8 (25.0%)  mc=32
+[PROGRESS] TFB eval: 3/8 (37.5%)  mc=32
+[PROGRESS] TFB eval: 4/8 (50.0%)  mc=32
+[PROGRESS] TFB eval: 5/8 (62.5%)  mc=32
+[PROGRESS] TFB eval: 6/8 (75.0%)  mc=32
+[PROGRESS] TFB eval: 7/8 (87.5%)  mc=32
+[PROGRESS] TFB eval: 8/8 (100.0%)  mc=32
+[TIME] INFER TFB on mmlu_science_college(ood): 101.81 sec (1.70 min)
+[PEAK] INFER TFB on mmlu_science_college(ood): alloc=14.97 GB  reserved=19.08 GB
+
+[mmlu_science_college(ood)][TFB]
+  NLL=0.7577  ACC=73.41%  ECE=9.70%  Brier=0.3697  mc=32  beta=0.002750  std=0.094299  flip_ratio=0.026012

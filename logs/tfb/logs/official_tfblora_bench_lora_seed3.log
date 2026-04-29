@@ -1,0 +1,252 @@
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Tue Apr 14 02:15:07 2026).
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Tue Apr 14 02:15:07 2026).
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Tue Apr 14 02:15:07 2026).
+Using the latest cached version of the dataset since openbookqa couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'main' at /home/tori/.cache/huggingface/datasets/openbookqa/main/0.0.0/388097ea7776314e93a529163e0fea805b8a6454 (last modified on Fri Apr 10 13:07:14 2026).
+Using the latest cached version of the dataset since ai2_arc couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'ARC-Challenge' at /home/tori/.cache/huggingface/datasets/ai2_arc/ARC-Challenge/0.0.0/210d026faf9955653af8916fad021475a3f00453 (last modified on Fri Apr  3 12:59:36 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'high_school_physics' at /home/tori/.cache/huggingface/datasets/cais___mmlu/high_school_physics/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr 11 19:35:06 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'high_school_chemistry' at /home/tori/.cache/huggingface/datasets/cais___mmlu/high_school_chemistry/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:14 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'high_school_biology' at /home/tori/.cache/huggingface/datasets/cais___mmlu/high_school_biology/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:16 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'college_physics' at /home/tori/.cache/huggingface/datasets/cais___mmlu/college_physics/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Tue Apr  7 17:20:42 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'college_chemistry' at /home/tori/.cache/huggingface/datasets/cais___mmlu/college_chemistry/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:20 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'college_biology' at /home/tori/.cache/huggingface/datasets/cais___mmlu/college_biology/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:22 2026).
+Using the latest cached version of the dataset since Idavidrein/gpqa couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'gpqa_main' at /home/tori/.cache/huggingface/datasets/Idavidrein___gpqa/gpqa_main/0.0.0/633f5ee89ab8ad4522a9f850766b73f62147ffdd (last modified on Wed Apr  8 09:54:32 2026).
+
+`torch_dtype` is deprecated! Use `dtype` instead!
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+=====================================
+Loaded benchmark_mcdataset source=scienceqa_closedchoice_grade2_11 eval=iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main
+=====================================
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+
+=== Loading Dataset for Task: obqa ===
+
+=== Loading Dataset for Task: arc-c ===
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[benchmark_mcdataset] train=5991 anchor=500(train) source_eval=2063(scienceqa_closedchoice_grade2_11:test) eval_tasks=['scienceqa_closedchoice_grade2_11', 'scienceqa_closedchoice_grade12', 'obqa', 'arc-c', 'mmlu_science_high', 'mmlu_science_college', 'gpqa_main'] train_bsz=48 eval_bsz=48
+Namespace(seed=3, evaluate=False, checkpoint=False, checkpoint_name='default', nowand=True, wandb_entity='<your_wandb_account>', wandb_project='Bayes LoRA', wandb_name='', dataset='scienceqa_closedchoice_grade2_11', dataset_type='benchmark_mcdataset', max_seq_len=300, modelwrapper='tfblora', model='Qwen/Qwen3-8B-Base', model_type='causallm', load_in_8bit=False, loss='nll', n_epochs=0, max_train_steps=0, eval_per_steps=500, early_stop_steps=0, batch_size=None, eval_batch_size=48, lr=0.0001, opt='adamw', opt_wd=0.0, warmup_ratio=0, adam_epsilon=1e-06, use_slow_tokenizer=False, add_space=False, is_s2s=False, pad_to_max_length=False, eval_steps=0, num_bins=10, load_model_path=None, load_lora_path='iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000', shared_init_lora_path=None, save_blob_dir=None, load_blob_dir=None, load_lora_huggingface_repo=None, log_path='official_tfblora_bench_lora_seed3', testing_set='train_train_test', ood_ori_dataset=None, eval_dataset='iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main', anchor_size=500, lora_r=8, lora_alpha=16, lora_dropout=0.05, apply_classhead_lora=True, apply_qkv_head_lora=False, bayes_train_n_samples=10, bayes_eval_n_samples=1, bayes_eval_n_samples_final=32, bayes_eps=0.05, bayes_gamma=8, bayes_kllr=0.02, bayes_beta=0.015, bayes_final_beta=0.18, bayes_flipout=True, bayes_inference_notsample=False, bayes_klreweighting=False, th=0.003, iter=5, conf_jobnum='0d990720-d8b8-4b77-8f51-6e449b8af5c9', conf_timestamp='2026-04-14 03:42:27.266498', conf_host='tori', outdim=4, num_samples=5991)
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 10667.16it/s]
+[Head] trimmed lm_head to 4 choice logits
+LoRA Model loaded successfully from local path: iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000
+=====================
+trainable params: 6,225,936 || all params: 7,574,647,824 || trainable%: 0.0822
+len(train_loader): 124
+num of epochs: 0
+[TIME] LOAD-STAGE TFBLORA on scienceqa_closedchoice_grade2_11: 10.47 sec (0.17 min)
+[PEAK] LOAD-STAGE TFBLORA on scienceqa_closedchoice_grade2_11: alloc=14.12 GB  reserved=14.26 GB
+[TFB-FIT] starting anchor sweep: beta_upper=0.015000
+[PROGRESS] TFB anchor sweep: 1/11 (9.1%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 2/11 (18.2%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 3/11 (27.3%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 4/11 (36.4%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 5/11 (45.5%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 6/11 (54.5%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 7/11 (63.6%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 8/11 (72.7%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 9/11 (81.8%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 10/11 (90.9%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 11/11 (100.0%)  beta=0.000000
+[TFB-FIT] binary-search iter 1/5: beta=0.008000 range=(0.001000, 0.015000)
+[PROGRESS] TFB fit iter 1/5: 1/11 (9.1%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 2/11 (18.2%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 3/11 (27.3%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 4/11 (36.4%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 5/11 (45.5%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 6/11 (54.5%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 7/11 (63.6%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 8/11 (72.7%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 9/11 (81.8%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 10/11 (90.9%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 11/11 (100.0%)  beta=0.008000
+[TFB-FIT] NLL Loss change ratio: 3.80650406504065%
+=====================
+[TFB-FIT] binary-search iter 2/5: beta=0.004500 range=(0.001000, 0.008000)
+[PROGRESS] TFB fit iter 2/5: 1/11 (9.1%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 2/11 (18.2%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 3/11 (27.3%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 4/11 (36.4%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 5/11 (45.5%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 6/11 (54.5%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 7/11 (63.6%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 8/11 (72.7%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 9/11 (81.8%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 10/11 (90.9%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 11/11 (100.0%)  beta=0.004500
+[TFB-FIT] NLL Loss change ratio: 1.0227642276422766%
+=====================
+[TFB-FIT] binary-search iter 3/5: beta=0.002750 range=(0.001000, 0.004500)
+[PROGRESS] TFB fit iter 3/5: 1/11 (9.1%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 2/11 (18.2%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 3/11 (27.3%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 4/11 (36.4%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 5/11 (45.5%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 6/11 (54.5%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 7/11 (63.6%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 8/11 (72.7%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 9/11 (81.8%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 10/11 (90.9%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 11/11 (100.0%)  beta=0.002750
+[TFB-FIT] NLL Loss change ratio: 0.23902439024390243%
+=====================
+[TFB-FIT] binary-search iter 4/5: beta=0.003625 range=(0.002750, 0.004500)
+[PROGRESS] TFB fit iter 4/5: 1/11 (9.1%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 2/11 (18.2%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 3/11 (27.3%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 4/11 (36.4%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 5/11 (45.5%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 6/11 (54.5%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 7/11 (63.6%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 8/11 (72.7%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 9/11 (81.8%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 10/11 (90.9%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 11/11 (100.0%)  beta=0.003625
+[TFB-FIT] NLL Loss change ratio: 0.4894308943089431%
+=====================
+[TFB-FIT] binary-search iter 5/5: beta=0.003188 range=(0.002750, 0.003625)
+[PROGRESS] TFB fit iter 5/5: 1/11 (9.1%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 2/11 (18.2%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 3/11 (27.3%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 4/11 (36.4%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 5/11 (45.5%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 6/11 (54.5%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 7/11 (63.6%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 8/11 (72.7%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 9/11 (81.8%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 10/11 (90.9%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 11/11 (100.0%)  beta=0.003188
+[TFB-FIT] NLL Loss change ratio: 0.3821138211382114%
+=====================
+[TFB-FIT] Optimal bayes_beta: 0.0031875000000000002
+[Save] TFB fit info -> checkpoints/tfblora/Qwen/Qwen3-8B-Base/scienceqa_closedchoice_grade2_11/official_tfblora_bench_lora_seed3/tfb_fit.json
+[TIME] FIT TFB on scienceqa_closedchoice_grade2_11(train): 143.45 sec (2.39 min)
+[PEAK] FIT TFB on scienceqa_closedchoice_grade2_11(train): alloc=14.59 GB  reserved=16.00 GB
+[PROGRESS] TFB eval: 1/43 (2.3%)  mc=32
+[PROGRESS] TFB eval: 4/43 (9.3%)  mc=32
+[PROGRESS] TFB eval: 8/43 (18.6%)  mc=32
+[PROGRESS] TFB eval: 12/43 (27.9%)  mc=32
+[PROGRESS] TFB eval: 16/43 (37.2%)  mc=32
+[PROGRESS] TFB eval: 20/43 (46.5%)  mc=32
+[PROGRESS] TFB eval: 24/43 (55.8%)  mc=32
+[PROGRESS] TFB eval: 28/43 (65.1%)  mc=32
+[PROGRESS] TFB eval: 32/43 (74.4%)  mc=32
+[PROGRESS] TFB eval: 36/43 (83.7%)  mc=32
+[PROGRESS] TFB eval: 40/43 (93.0%)  mc=32
+[PROGRESS] TFB eval: 43/43 (100.0%)  mc=32
+[TIME] INFER TFB on scienceqa_closedchoice_grade2_11(test): 359.17 sec (5.99 min)
+[PEAK] INFER TFB on scienceqa_closedchoice_grade2_11(test): alloc=14.95 GB  reserved=17.80 GB
+
+[scienceqa_closedchoice_grade2_11(test)][TFB]
+  NLL=0.1503  ACC=94.38%  ECE=1.10%  Brier=0.0801  mc=32  beta=0.003188  std=0.038119  flip_ratio=0.005817
+[PROGRESS] TFB eval: 1/7 (14.3%)  mc=32
+[PROGRESS] TFB eval: 2/7 (28.6%)  mc=32
+[PROGRESS] TFB eval: 3/7 (42.9%)  mc=32
+[PROGRESS] TFB eval: 4/7 (57.1%)  mc=32
+[PROGRESS] TFB eval: 5/7 (71.4%)  mc=32
+[PROGRESS] TFB eval: 6/7 (85.7%)  mc=32
+[PROGRESS] TFB eval: 7/7 (100.0%)  mc=32
+[TIME] INFER TFB on scienceqa_closedchoice_grade12(ood): 72.82 sec (1.21 min)
+[PEAK] INFER TFB on scienceqa_closedchoice_grade12(ood): alloc=14.63 GB  reserved=17.80 GB
+
+[scienceqa_closedchoice_grade12(ood)][TFB]
+  NLL=0.2555  ACC=93.23%  ECE=2.86%  Brier=0.1187  mc=32  beta=0.003188  std=0.045166  flip_ratio=0.003226
+[PROGRESS] TFB eval: 1/11 (9.1%)  mc=32
+[PROGRESS] TFB eval: 2/11 (18.2%)  mc=32
+[PROGRESS] TFB eval: 3/11 (27.3%)  mc=32
+[PROGRESS] TFB eval: 4/11 (36.4%)  mc=32
+[PROGRESS] TFB eval: 5/11 (45.5%)  mc=32
+[PROGRESS] TFB eval: 6/11 (54.5%)  mc=32
+[PROGRESS] TFB eval: 7/11 (63.6%)  mc=32
+[PROGRESS] TFB eval: 8/11 (72.7%)  mc=32
+[PROGRESS] TFB eval: 9/11 (81.8%)  mc=32
+[PROGRESS] TFB eval: 10/11 (90.9%)  mc=32
+[PROGRESS] TFB eval: 11/11 (100.0%)  mc=32
+[TIME] INFER TFB on obqa(ood): 77.35 sec (1.29 min)
+[PEAK] INFER TFB on obqa(ood): alloc=14.48 GB  reserved=15.84 GB
+
+[obqa(ood)][TFB]
+  NLL=0.3862  ACC=88.40%  ECE=4.11%  Brier=0.1797  mc=32  beta=0.003188  std=0.062877  flip_ratio=0.014000
+[PROGRESS] TFB eval: 1/25 (4.0%)  mc=32
+[PROGRESS] TFB eval: 2/25 (8.0%)  mc=32
+[PROGRESS] TFB eval: 4/25 (16.0%)  mc=32
+[PROGRESS] TFB eval: 6/25 (24.0%)  mc=32
+[PROGRESS] TFB eval: 8/25 (32.0%)  mc=32
+[PROGRESS] TFB eval: 10/25 (40.0%)  mc=32
+[PROGRESS] TFB eval: 12/25 (48.0%)  mc=32
+[PROGRESS] TFB eval: 14/25 (56.0%)  mc=32
+[PROGRESS] TFB eval: 16/25 (64.0%)  mc=32
+[PROGRESS] TFB eval: 18/25 (72.0%)  mc=32
+[PROGRESS] TFB eval: 20/25 (80.0%)  mc=32
+[PROGRESS] TFB eval: 22/25 (88.0%)  mc=32
+[PROGRESS] TFB eval: 24/25 (96.0%)  mc=32
+[PROGRESS] TFB eval: 25/25 (100.0%)  mc=32
+[TIME] INFER TFB on arc-c(ood): 261.56 sec (4.36 min)
+[PEAK] INFER TFB on arc-c(ood): alloc=14.78 GB  reserved=17.76 GB
+
+[arc-c(ood)][TFB]
+  NLL=0.2922  ACC=91.38%  ECE=4.05%  Brier=0.1377  mc=32  beta=0.003188  std=0.046411  flip_ratio=0.007679
+[PROGRESS] TFB eval: 1/14 (7.1%)  mc=32
+[PROGRESS] TFB eval: 2/14 (14.3%)  mc=32
+[PROGRESS] TFB eval: 3/14 (21.4%)  mc=32
+[PROGRESS] TFB eval: 4/14 (28.6%)  mc=32
+[PROGRESS] TFB eval: 5/14 (35.7%)  mc=32
+[PROGRESS] TFB eval: 6/14 (42.9%)  mc=32
+[PROGRESS] TFB eval: 7/14 (50.0%)  mc=32
+[PROGRESS] TFB eval: 8/14 (57.1%)  mc=32
+[PROGRESS] TFB eval: 9/14 (64.3%)  mc=32
+[PROGRESS] TFB eval: 10/14 (71.4%)  mc=32
+[PROGRESS] TFB eval: 11/14 (78.6%)  mc=32
+[PROGRESS] TFB eval: 12/14 (85.7%)  mc=32
+[PROGRESS] TFB eval: 13/14 (92.9%)  mc=32
+[PROGRESS] TFB eval: 14/14 (100.0%)  mc=32
+[TIME] INFER TFB on mmlu_science_high(ood): 195.14 sec (3.25 min)
+[PEAK] INFER TFB on mmlu_science_high(ood): alloc=15.22 GB  reserved=19.08 GB
+
+[mmlu_science_high(ood)][TFB]
+  NLL=0.5948  ACC=81.17%  ECE=6.48%  Brier=0.2754  mc=32  beta=0.003188  std=0.089390  flip_ratio=0.013554
+[PROGRESS] TFB eval: 1/8 (12.5%)  mc=32
+[PROGRESS] TFB eval: 2/8 (25.0%)  mc=32
+[PROGRESS] TFB eval: 3/8 (37.5%)  mc=32
+[PROGRESS] TFB eval: 4/8 (50.0%)  mc=32
+[PROGRESS] TFB eval: 5/8 (62.5%)  mc=32
+[PROGRESS] TFB eval: 6/8 (75.0%)  mc=32
+[PROGRESS] TFB eval: 7/8 (87.5%)  mc=32
+[PROGRESS] TFB eval: 8/8 (100.0%)  mc=32
+[TIME] INFER TFB on mmlu_science_college(ood): 99.69 sec (1.66 min)
+[PEAK] INFER TFB on mmlu_science_college(ood): alloc=14.97 GB  reserved=19.08 GB
+
+[mmlu_science_college(ood)][TFB]
+  NLL=0.8121  ACC=72.54%  ECE=7.96%  Brier=0.3828  mc=32  beta=0.003188  std=0.126434  flip_ratio=0.037572
+[PROGRESS] TFB eval: 1/10 (10.0%)  mc=32
+[PROGRESS] TFB eval: 2/10 (20.0%)  mc=32
+[PROGRESS] TFB eval: 3/10 (30.0%)  mc=32
+[PROGRESS] TFB eval: 4/10 (40.0%)  mc=32
+[PROGRESS] TFB eval: 5/10 (50.0%)  mc=32
+[PROGRESS] TFB eval: 6/10 (60.0%)  mc=32
+[PROGRESS] TFB eval: 7/10 (70.0%)  mc=32
+[PROGRESS] TFB eval: 8/10 (80.0%)  mc=32
+[PROGRESS] TFB eval: 9/10 (90.0%)  mc=32
+[PROGRESS] TFB eval: 10/10 (100.0%)  mc=32
+[TIME] INFER TFB on gpqa_main(ood): 266.40 sec (4.44 min)
+[PEAK] INFER TFB on gpqa_main(ood): alloc=15.58 GB  reserved=19.94 GB
+
+[gpqa_main(ood)][TFB]
+  NLL=1.5290  ACC=36.83%  ECE=20.79%  Brier=0.7773  mc=32  beta=0.003188  std=0.218262  flip_ratio=0.089286

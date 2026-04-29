@@ -1,0 +1,59 @@
+`trust_remote_code` is not supported anymore.
+Please check that the Hugging Face dataset 'winogrande' isn't based on a loading script and remove `trust_remote_code`.
+If the dataset is based on a loading script, please ask the dataset author to remove it and convert it to a standard format like Parquet.
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using device: cuda
+[Protocol] eval_protocol=bayesian_peft
+[Curvature backend] Using ASDL Kron on the full wrapper graph with randomized PSD low-rank compression for large blocks.
+[KFAC] disable_dropout_during_kfac_mu=True
+
+[Load] base_model = meta-llama/Llama-2-7b-hf
+[Load] adapter    = bayesian-peft/checkpoints/mle/meta-llama/Llama-2-7b-hf/winogrande_m/lora-winogrande_m-lr5e-5-bs4-drop0.1-step2000-seed1
+[Protocol] tokenizer.add_eos_token=False
+[Protocol] using direct bayesian-peft dataset wrapper for source task wgm
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights:   0%|          | 1/291 [00:00<00:39,  7.27it/s]Loading weights:  17%|█▋        | 49/291 [00:00<00:01, 203.53it/s]Loading weights:  24%|██▍       | 70/291 [00:00<00:01, 151.47it/s]Loading weights:  30%|██▉       | 86/291 [00:00<00:01, 134.37it/s]Loading weights:  37%|███▋      | 109/291 [00:00<00:01, 154.83it/s]Loading weights:  45%|████▍     | 130/291 [00:00<00:00, 164.14it/s]Loading weights:  51%|█████     | 148/291 [00:00<00:00, 166.45it/s]Loading weights:  57%|█████▋    | 166/291 [00:01<00:00, 157.01it/s]Loading weights:  65%|██████▌   | 190/291 [00:01<00:00, 167.95it/s]Loading weights:  75%|███████▍  | 217/291 [00:01<00:00, 193.93it/s]Loading weights:  82%|████████▏ | 238/291 [00:01<00:00, 190.20it/s]Loading weights:  90%|█████████ | 262/291 [00:01<00:00, 200.52it/s]Loading weights:  97%|█████████▋| 283/291 [00:01<00:00, 201.74it/s]Loading weights: 100%|██████████| 291/291 [00:01<00:00, 176.60it/s]
+`trust_remote_code` is not supported anymore.
+Please check that the Hugging Face dataset 'winogrande' isn't based on a loading script and remove `trust_remote_code`.
+If the dataset is based on a loading script, please ask the dataset author to remove it and convert it to a standard format like Parquet.
+[Head] keeping full-vocab lm_head (bayesian_peft protocol)
+[Adapter] loaded legacy checkpoint keys=131 remapped=131
+
+[Setup] Casting all LoRA params to float32 for numerical stability...
+[Slices] source=task_train_split[random_10_slices_seed_1] natural_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9] order=sorted order_seed=0 run_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[KFAC] prepared 10 slices from task_train_split[random_10_slices_seed_1]; samples=2558 batches=640 drop_last=False
+[Posterior Stats Cache] loaded from caches/bayesian_peft_mle_iid_random_T10/wgm_seed1_stats.pt (modules=65 T=10)
+
+=== Independent Slice Ensemble Posterior ===
+[Independent Ensemble] modules=65 T=10 samples_per_slice=10 total_samples=100 prior=P1=1 no_Kalman no_Q
+[TIME] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on wgm: 12.26 sec (0.20 min)
+[PEAK] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on wgm: alloc=13.08 GB  reserved=13.11 GB
+[Tau auto] anchor source=train rows=500 batch_size=96 mc_samples=32
+
+=== Auto-selecting posterior_tau by direct anchor KL estimate ===
+[Tau auto] baseline tau=0.000000 Acc0=89.20% NLL0=0.266831 KL0=0.000122
+[Tau auto] target: 0.050000 <= KL_tau <= 0.052500 (direct_target=0.050000, acc floor logged only: 88.20%) using KL(tau) ~= C * tau^2 within [0, 1.000000]
+[Tau auto] probe tau=0.500000 acc=89.20% nll=0.249066 kl=0.005820 accuracy_ok=1 kl_in_window=0
+[Tau auto] direct estimate from probe: tau=1.000000 = 0.500000 * sqrt(0.050000 / 0.005820)
+[Tau auto] direct tau=1.000000 acc=88.60% nll=0.254535 kl=0.036140 accuracy_ok=1 kl_in_window=0
+[Tau auto] one-step KL refinement: tau=1.000000 = 1.000000 * sqrt(0.050000 / 0.036140)
+[Tau auto] selected posterior_tau=1.000000 source=direct_closest_kl anchor_acc=88.60% anchor_nll=0.254535 anchor_kl=0.036140 kl_window=[0.050000, 0.052500]
+[TIME] FIT Seq-LoRA tau on wgm(train_anchor): 193.35 sec (3.22 min)
+[PEAK] FIT Seq-LoRA tau on wgm(train_anchor): alloc=13.79 GB  reserved=15.09 GB
+[Tau] mode=auto effective_posterior_tau=1.000000
+
+=== Evaluation: source=wgm | targets=['wgm'] ===
+[TIME] INFER Seq-LoRA on wgm_iid: 702.59 sec (11.71 min)
+[PEAK] INFER Seq-LoRA on wgm_iid: alloc=13.79 GB  reserved=14.77 GB
+
+[wgm_iid]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.7181
+  brier_bayes: 0.4096
+  ece_bayes: 12.81%
+  acc_bayes: 72.22%
+  kl_map_to_bayes: 0.043419
+  posterior_tau: 1.000000
+  [bayesian-peft style] val_acc: 0.7221783995628357, val_ece: 0.12813949584960938, val_nll: 0.7181374693631938, val_brier: 0.40958101653450574
+  [Timing] Bayes sampling: 702.582s
+
+[Done] Evaluation complete for source task wgm.

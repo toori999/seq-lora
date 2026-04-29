@@ -1,0 +1,79 @@
+$ /home/tori/miniconda3_new/envs/seq-lora/bin/python mcdrop_eval.py --task scienceqa_closedchoice_grade2_11 --map_adapter_dir /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_4/map_step_2000 --eval_tasks iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main --seed 0 --mc_samples 32 --temp 1.0
+
+Using device: cuda amp_dtype: torch.bfloat16
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_4/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+`torch_dtype` is deprecated! Use `dtype` instead!
+
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]
+Loading weights:  43%|████▎     | 171/399 [00:00<00:00, 1694.44it/s]
+Loading weights: 100%|██████████| 399/399 [00:00<00:00, 2640.61it/s]
+[Head] trimmed lm_head to 4 choice logits
+[TIME] LOAD-STAGE MCDrop on scienceqa_closedchoice_grade2_11: 12.80 sec (0.21 min)
+[PEAK] LOAD-STAGE MCDrop on scienceqa_closedchoice_grade2_11: alloc=15.26 GB  reserved=15.43 GB
+
+========================
+      MCDROP ONLY       
+========================
+[Config] MC_SAMPLES=32 TEMP=1.0
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[TIME] INFER MCDrop on scienceqa_closedchoice_grade2_11(test): 341.48 sec (5.69 min)
+[PEAK] INFER MCDrop on scienceqa_closedchoice_grade2_11(test): alloc=14.59 GB  reserved=16.38 GB
+
+[scienceqa_closedchoice_grade2_11(test)][MCDROP]
+  NLL=0.1990  ACC=93.99%  ECE=3.99%  Brier=0.0906  std=0.0012  mc=32
+[TIME] INFER MCDrop on scienceqa_closedchoice_grade12(ood): 69.07 sec (1.15 min)
+[PEAK] INFER MCDrop on scienceqa_closedchoice_grade12(ood): alloc=14.58 GB  reserved=16.38 GB
+
+[scienceqa_closedchoice_grade12(ood)][MCDROP]
+  NLL=0.3423  ACC=93.55%  ECE=5.88%  Brier=0.1222  std=0.0012  mc=32
+
+=== Loading Dataset for Task: obqa ===
+[TIME] INFER MCDrop on obqa(ood): 74.85 sec (1.25 min)
+[PEAK] INFER MCDrop on obqa(ood): alloc=14.38 GB  reserved=15.74 GB
+
+[obqa(ood)][MCDROP]
+  NLL=0.5759  ACC=87.40%  ECE=9.44%  Brier=0.2116  std=0.0024  mc=32
+
+=== Loading Dataset for Task: arc-c ===
+Using the latest cached version of the dataset since ai2_arc couldn't be found on the Hugging Face Hub
+Found the latest cached dataset configuration 'ARC-Challenge' at /home/tori/.cache/huggingface/datasets/ai2_arc/ARC-Challenge/0.0.0/210d026faf9955653af8916fad021475a3f00453 (last modified on Fri Apr  3 12:59:36 2026).
+[TIME] INFER MCDrop on arc-c(ood): 250.19 sec (4.17 min)
+[PEAK] INFER MCDrop on arc-c(ood): alloc=14.59 GB  reserved=16.61 GB
+
+[arc-c(ood)][MCDROP]
+  NLL=0.4322  ACC=91.38%  ECE=6.94%  Brier=0.1533  std=0.0012  mc=32
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[TIME] INFER MCDrop on mmlu_science_high(ood): 184.46 sec (3.07 min)
+[PEAK] INFER MCDrop on mmlu_science_high(ood): alloc=14.82 GB  reserved=18.01 GB
+
+[mmlu_science_high(ood)][MCDROP]
+  NLL=0.8066  ACC=81.93%  ECE=12.27%  Brier=0.2985  std=0.0029  mc=32
+[MMLU] loading subject: college_physics
+[Dataset] Falling back to local cached MMLU subject 'college_physics' after load_dataset failure: Server error '504 Gateway Time-out' for url 'https://huggingface.co/api/datasets/cais/mmlu/tree/c30699e8356da336a370243923dbaf21066bb9fe/college_physics?recursive=true&expand=false' (Amz CF ID: ABEthy1MwEfLEKkmXiB114BRy8s30EFMixf7QRux0JsNEi-zy6eJug==)
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/504
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+
+Map:   0%|          | 0/346 [00:00<?, ? examples/s]
+Map: 100%|██████████| 346/346 [00:00<00:00, 15281.08 examples/s]
+
+Filter:   0%|          | 0/346 [00:00<?, ? examples/s]
+Filter: 100%|██████████| 346/346 [00:00<00:00, 31961.18 examples/s]
+
+Flattening the indices:   0%|          | 0/346 [00:00<?, ? examples/s]
+Flattening the indices: 100%|██████████| 346/346 [00:00<00:00, 161301.45 examples/s]
+[TIME] INFER MCDrop on mmlu_science_college(ood): 94.66 sec (1.58 min)
+[PEAK] INFER MCDrop on mmlu_science_college(ood): alloc=14.77 GB  reserved=18.01 GB
+
+[mmlu_science_college(ood)][MCDROP]
+  NLL=1.0277  ACC=72.83%  ECE=14.99%  Brier=0.4151  std=0.0042  mc=32
+[TIME] INFER MCDrop on gpqa_main(ood): 249.70 sec (4.16 min)
+[PEAK] INFER MCDrop on gpqa_main(ood): alloc=15.16 GB  reserved=19.50 GB
+
+[gpqa_main(ood)][MCDROP]
+  NLL=1.9596  ACC=35.04%  ECE=34.40%  Brier=0.8854  std=0.0090  mc=32

@@ -1,0 +1,53 @@
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Fri Apr 10 16:48:10 2026).
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Fri Apr 10 16:48:10 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'college_physics' at /home/tori/.cache/huggingface/datasets/cais___mmlu/college_physics/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Tue Apr  7 17:20:42 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'college_chemistry' at /home/tori/.cache/huggingface/datasets/cais___mmlu/college_chemistry/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:20 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'college_biology' at /home/tori/.cache/huggingface/datasets/cais___mmlu/college_biology/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:22 2026).
+
+`torch_dtype` is deprecated! Use `dtype` instead!
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+=====================================
+Loaded benchmark_mcdataset source=scienceqa_closedchoice_grade2_11 eval=mmlu_science_college
+=====================================
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[benchmark_mcdataset] train=5991 anchor=500(train) test=346(mmlu_science_college:ood)
+Namespace(seed=4, evaluate=True, checkpoint=False, checkpoint_name='default', nowand=True, wandb_entity='<your_wandb_account>', wandb_project='Bayes LoRA', wandb_name='', dataset='scienceqa_closedchoice_grade2_11', dataset_type='benchmark_mcdataset', max_seq_len=300, modelwrapper='tfblora', model='Qwen/Qwen3-8B-Base', model_type='causallm', load_in_8bit=False, loss='nll', n_epochs=0, max_train_steps=10000, eval_per_steps=6000, early_stop_steps=0, batch_size=32, lr=0.0001, opt='adamw', opt_wd=0.0, warmup_ratio=0.06, adam_epsilon=1e-06, use_slow_tokenizer=False, add_space=False, is_s2s=False, pad_to_max_length=False, eval_steps=0, num_bins=15, load_model_path=None, load_lora_path='iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_4/map_step_2000', load_lora_huggingface_repo=None, log_path='official_tfblora_seed4_mmlu_science_college', testing_set='train_train_test', ood_ori_dataset=None, eval_dataset='mmlu_science_college', anchor_size=500, lora_r=8, lora_alpha=16, lora_dropout=0.05, apply_classhead_lora=True, apply_qkv_head_lora=False, bayes_train_n_samples=10, bayes_eval_n_samples=10, bayes_eval_n_samples_final=10, bayes_eps=0.05, bayes_gamma=8, bayes_kllr=0.02, bayes_beta=0.0031875000000000002, bayes_final_beta=0.18, bayes_flipout=True, bayes_inference_notsample=False, bayes_klreweighting=True, th=0.003, iter=0, conf_jobnum='4e420eea-0333-402a-82dd-8fcb0b85c6e0', conf_timestamp='2026-04-10 17:08:35.716581', conf_host='tori', outdim=4, num_samples=5991)
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 10574.48it/s]
+[Head] trimmed lm_head to 4 choice logits
+LoRA Model loaded successfully from local path: iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_4/map_step_2000
+=====================
+trainable params: 6,225,936 || all params: 7,574,647,824 || trainable%: 0.0822
+len(train_loader): 188
+num of epochs: 54
+[TIME] LOAD-STAGE TFBLORA on scienceqa_closedchoice_grade2_11: 5.69 sec (0.09 min)
+[PEAK] LOAD-STAGE TFBLORA on scienceqa_closedchoice_grade2_11: alloc=14.12 GB  reserved=14.26 GB
+[Save] TFB fit info -> checkpoints/tfblora/Qwen/Qwen3-8B-Base/scienceqa_closedchoice_grade2_11/official_tfblora_seed4_mmlu_science_college/tfb_fit.json
+[TIME] FIT TFB on scienceqa_closedchoice_grade2_11(train): 0.23 sec (0.00 min)
+[PEAK] FIT TFB on scienceqa_closedchoice_grade2_11(train): alloc=14.13 GB  reserved=14.28 GB
+[PROGRESS] TFB eval: 1/11 (9.1%)  mc=10
+[PROGRESS] TFB eval: 2/11 (18.2%)  mc=10
+[PROGRESS] TFB eval: 3/11 (27.3%)  mc=10
+[PROGRESS] TFB eval: 4/11 (36.4%)  mc=10
+[PROGRESS] TFB eval: 5/11 (45.5%)  mc=10
+[PROGRESS] TFB eval: 6/11 (54.5%)  mc=10
+[PROGRESS] TFB eval: 7/11 (63.6%)  mc=10
+[PROGRESS] TFB eval: 8/11 (72.7%)  mc=10
+[PROGRESS] TFB eval: 9/11 (81.8%)  mc=10
+[PROGRESS] TFB eval: 10/11 (90.9%)  mc=10
+[PROGRESS] TFB eval: 11/11 (100.0%)  mc=10
+[TIME] INFER TFB on mmlu_science_college(ood): 64.72 sec (1.08 min)
+[PEAK] INFER TFB on mmlu_science_college(ood): alloc=16.90 GB  reserved=17.68 GB
+
+[mmlu_science_college(ood)][TFB]
+  NLL=0.8359  ACC=73.12%  ECE=8.93%  Brier=0.3867  mc=10  beta=0.003188  std=0.063965  flip_ratio=0.092486

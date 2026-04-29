@@ -1,0 +1,55 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using device: cuda
+[Protocol] eval_protocol=bayesian_peft
+[Curvature backend] Using ASDL Kron on the full wrapper graph with randomized PSD low-rank compression for large blocks.
+[KFAC] disable_dropout_during_kfac_mu=True
+
+[Load] base_model = meta-llama/Llama-2-7b-hf
+[Load] adapter    = bayesian-peft/checkpoints/mle/meta-llama/Llama-2-7b-hf/ARC-Easy/lora-ARC-Easy-lr5e-5-bs4-drop0.1-step2000-seed1
+[Protocol] tokenizer.add_eos_token=False
+[Protocol] using direct bayesian-peft dataset wrapper for source task arc-e
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights:   2%|▏         | 6/291 [00:00<00:05, 55.78it/s]Loading weights:   7%|▋         | 20/291 [00:00<00:02, 102.16it/s]Loading weights:  11%|█         | 31/291 [00:00<00:02, 103.97it/s]Loading weights:  23%|██▎       | 68/291 [00:00<00:01, 202.99it/s]Loading weights:  31%|███       | 89/291 [00:00<00:01, 184.89it/s]Loading weights:  38%|███▊      | 112/291 [00:00<00:00, 198.80it/s]Loading weights:  46%|████▌     | 133/291 [00:00<00:00, 192.43it/s]Loading weights:  53%|█████▎    | 153/291 [00:00<00:00, 175.08it/s]Loading weights:  59%|█████▉    | 171/291 [00:01<00:00, 147.82it/s]Loading weights:  65%|██████▍   | 188/291 [00:01<00:00, 152.14it/s]Loading weights:  73%|███████▎  | 213/291 [00:01<00:00, 174.54it/s]Loading weights:  80%|███████▉  | 232/291 [00:01<00:00, 174.41it/s]Loading weights:  90%|█████████ | 262/291 [00:01<00:00, 203.58it/s]Loading weights:  98%|█████████▊| 285/291 [00:01<00:00, 207.12it/s]Loading weights: 100%|██████████| 291/291 [00:01<00:00, 180.64it/s]
+[Head] keeping full-vocab lm_head (bayesian_peft protocol)
+[Adapter] loaded legacy checkpoint keys=131 remapped=131
+
+[Setup] Casting all LoRA params to float32 for numerical stability...
+[Slices] source=task_train_split[random_10_slices_seed_1] natural_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9] order=sorted order_seed=0 run_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[KFAC] prepared 10 slices from task_train_split[random_10_slices_seed_1]; samples=2251 batches=570 drop_last=False
+[Posterior Stats Cache] loaded from caches/bayesian_peft_mle_iid_random_T10/arc-e_seed1_stats.pt (modules=65 T=10)
+
+=== Independent Slice Ensemble Posterior ===
+[Independent Ensemble] modules=65 T=10 samples_per_slice=10 total_samples=100 prior=P1=1 no_Kalman no_Q
+[TIME] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on arc-e: 11.61 sec (0.19 min)
+[PEAK] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on arc-e: alloc=13.08 GB  reserved=13.11 GB
+[Tau auto] anchor source=train rows=500 batch_size=96 mc_samples=32
+
+=== Auto-selecting posterior_tau by direct anchor KL estimate ===
+[Tau auto] baseline tau=0.000000 Acc0=98.00% NLL0=0.088636 KL0=0.000245
+[Tau auto] target: 0.050000 <= KL_tau <= 0.052500 (direct_target=0.050000, acc floor logged only: 97.00%) using KL(tau) ~= C * tau^2 within [0, 1.000000]
+[Tau auto] probe tau=0.500000 acc=98.20% nll=0.106270 kl=0.011170 accuracy_ok=1 kl_in_window=0
+[Tau auto] direct estimate from probe: tau=1.000000 = 0.500000 * sqrt(0.050000 / 0.011170)
+[Tau auto] direct tau=1.000000 acc=97.40% nll=0.180027 kl=0.081307 accuracy_ok=1 kl_in_window=0
+[Tau auto] one-step KL refinement: tau=0.784189 = 1.000000 * sqrt(0.050000 / 0.081307)
+[Tau auto] refined tau=0.784189 acc=97.80% nll=0.138291 kl=0.040748 accuracy_ok=1 kl_in_window=0
+[Tau auto] linear KL interpolation: tau=0.833417 from (0.784189, kl=0.040748) to (1.000000, kl=0.081307) target_kl=0.050000; selecting without extra eval
+[Tau auto] selected posterior_tau=0.833417 source=interp_linear_kl_no_eval anchor_acc=97.80% anchor_nll=0.138291 anchor_kl=0.050000 kl_window=[0.050000, 0.052500]
+[TIME] FIT Seq-LoRA tau on arc-e(train_anchor): 634.20 sec (10.57 min)
+[PEAK] FIT Seq-LoRA tau on arc-e(train_anchor): alloc=14.82 GB  reserved=17.18 GB
+[Tau] mode=auto effective_posterior_tau=0.833417
+
+=== Evaluation: source=arc-e | targets=['arc-e'] ===
+[TIME] INFER Seq-LoRA on arc-e_iid: 2981.39 sec (49.69 min)
+[PEAK] INFER Seq-LoRA on arc-e_iid: alloc=15.34 GB  reserved=17.89 GB
+
+[arc-e_iid]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.4156
+  brier_bayes: 0.2157
+  ece_bayes: 2.73%
+  acc_bayes: 84.85%
+  kl_map_to_bayes: 0.053329
+  posterior_tau: 0.833417
+  [bayesian-peft style] val_acc: 0.8484848737716675, val_ece: 0.027311818674206734, val_nll: 0.4156273543232619, val_brier: 0.21570824874370587
+  [Timing] Bayes sampling: 2981.387s
+
+[Done] Evaluation complete for source task arc-e.

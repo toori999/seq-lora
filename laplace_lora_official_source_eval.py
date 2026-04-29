@@ -13,12 +13,12 @@ import torch
 import torch.nn as nn
 from laplace import Laplace
 import laplace.utils.matrix as laplace_matrix_utils
-from peft import PeftConfig, PeftModel
-from safetensors import safe_open
+from peft import PeftConfig, PeftModel, get_peft_model
+from safetensors import SafetensorError, safe_open
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from datasets import concatenate_datasets
+from datasets import concatenate_datasets, load_dataset
 
 from common_eval_utils import (
     SCIENCEQA_CURRIC_TASK_NAME,
@@ -27,6 +27,7 @@ from common_eval_utils import (
     get_active_adapter_name,
     get_choice_labels,
     get_choice_token_ids,
+    get_single_token_id,
     get_lm_head_dropout,
     get_lm_head_lora_scaling,
     get_task_num_classes,
@@ -330,12 +331,85 @@ class AdapterHeadInfo:
     source_key: str
 
 
+def _read_file_prefix(path: str, n: int = 64) -> bytes:
+    with open(path, "rb") as f:
+        return f.read(n)
+
+
+def _ascii_preview(raw: bytes) -> str:
+    return "".join(chr(b) if 32 <= b < 127 else "." for b in raw)
+
+
+def _raise_adapter_safetensors_error(st_path: str, exc: Exception) -> None:
+    try:
+        size = os.path.getsize(st_path)
+    except OSError:
+        size = -1
+    try:
+        prefix = _read_file_prefix(st_path)
+    except OSError:
+        prefix = b""
+
+    hints: List[str] = []
+    if prefix.startswith(b"version https://git-lfs.github.com/spec"):
+        hints.append(
+            "the file is a Git LFS pointer; run `git lfs pull` or re-copy the real adapter weights"
+        )
+    elif prefix.startswith(b"PK\x03\x04") or prefix.startswith(b"\x80"):
+        hints.append(
+            "the file looks like a PyTorch checkpoint, not safetensors; remove this "
+            "`adapter_model.safetensors` name and use `adapter_model.bin` instead"
+        )
+    else:
+        hints.append("the file may be truncated, corrupted, or not a safetensors file")
+
+    bin_path = os.path.join(os.path.dirname(st_path), "adapter_model.bin")
+    if os.path.exists(bin_path):
+        hints.append(
+            "`adapter_model.bin` exists, but PEFT will still prefer the invalid "
+            "`adapter_model.safetensors`; move the bad safetensors file aside to use the bin file"
+        )
+
+    hint_text = "; ".join(hints)
+    raise ValueError(
+        "Could not read PEFT adapter weights as safetensors.\n"
+        f"  file: {st_path}\n"
+        f"  size: {size} bytes\n"
+        f"  first_bytes_hex: {prefix[:32].hex(' ') if prefix else 'unavailable'}\n"
+        f"  first_bytes_ascii: {_ascii_preview(prefix[:32]) if prefix else 'unavailable'}\n"
+        f"  original_error: {exc}\n"
+        f"  likely_fix: {hint_text}"
+    ) from exc
+
+
+def _validate_adapter_weights_file(adapter_dir: str) -> None:
+    st_path = os.path.join(adapter_dir, "adapter_model.safetensors")
+    if os.path.exists(st_path):
+        try:
+            with safe_open(st_path, framework="pt", device="cpu"):
+                pass
+        except SafetensorError as exc:
+            _raise_adapter_safetensors_error(st_path, exc)
+        return
+
+    bin_path = os.path.join(adapter_dir, "adapter_model.bin")
+    if os.path.exists(bin_path):
+        return
+
+    raise FileNotFoundError(
+        f"Could not find adapter_model.safetensors or adapter_model.bin under {adapter_dir}"
+    )
+
+
 def _iter_adapter_tensor_shapes(adapter_dir: str):
     st_path = os.path.join(adapter_dir, "adapter_model.safetensors")
     if os.path.exists(st_path):
-        with safe_open(st_path, framework="pt", device="cpu") as f:
-            for key in f.keys():
-                yield key, tuple(int(x) for x in f.get_tensor(key).shape)
+        try:
+            with safe_open(st_path, framework="pt", device="cpu") as f:
+                for key in f.keys():
+                    yield key, tuple(int(x) for x in f.get_tensor(key).shape)
+        except SafetensorError as exc:
+            _raise_adapter_safetensors_error(st_path, exc)
         return
 
     bin_path = os.path.join(adapter_dir, "adapter_model.bin")
@@ -385,64 +459,161 @@ def _is_arc_task(task_name: str) -> bool:
     return str(task_name).lower().strip() in {"arc-c", "arc-e"}
 
 
-def _is_bayesian_peft_arc_adapter(task_name: str, adapter_dir: str, base_model_name: str) -> bool:
-    if not _is_arc_task(task_name):
+def _is_bayesian_peft_mcqa_adapter(task_name: str, adapter_dir: str, base_model_name: str) -> bool:
+    task = str(task_name).lower().strip()
+    if task not in {"wgs", "wgm", "arc-c", "arc-e", "obqa", "boolq"}:
         return False
-    path = os.path.normpath(adapter_dir).lower()
+    path = os.path.normpath(adapter_dir).replace(os.sep, "/").lower()
     return "llama" in str(base_model_name).lower() and (
-        "arc-challenge" in path or "arc-easy" in path
+        "bayesian-peft/checkpoints/mle" in path
+        or "bayesian_peft/checkpoints/mle" in path
+        or "llama_mle_maps" in path
     )
 
 
-def _task_num_classes(task_name: str, bayesian_peft_arc_style: bool) -> int:
-    if bayesian_peft_arc_style and _is_arc_task(task_name):
+def _task_num_classes(task_name: str, bayesian_peft_mcqa_style: bool) -> int:
+    if bayesian_peft_mcqa_style and _is_arc_task(task_name):
         return 5
     return get_task_num_classes(task_name)
 
 
-def preprocess_bayesian_peft_arc(
+def _bayesian_peft_target_labels(task_name: str, num_classes: int) -> List[str]:
+    if str(task_name).lower().strip() == "boolq":
+        return ["True", "False"]
+    return get_choice_labels(num_classes)
+
+
+def get_bayesian_peft_target_token_ids(
+    tokenizer: AutoTokenizer,
+    device: torch.device,
+    task_name: str,
+    num_classes: int,
+) -> torch.Tensor:
+    labels = _bayesian_peft_target_labels(task_name, num_classes)
+    ids = [get_single_token_id(tokenizer, label) for label in labels]
+    print(f"[Target token ids] task={task_name} labels={dict(zip(labels, ids))}")
+    return torch.tensor(ids, device=device, dtype=torch.long)
+
+
+def load_bayesian_peft_mle_adapter(
+    base_model: nn.Module,
+    adapter_dir: str,
+    is_trainable: bool,
+) -> PeftModel:
+    """Match bayesian-peft's CausalLM -> get_peft_model -> WrapperBase(PeftModel) load path."""
+    print("[PEFT load] bayesian-peft nested get_peft_model -> PeftModel.from_pretrained")
+    inner_cfg = PeftConfig.from_pretrained(adapter_dir)
+    inner_cfg.inference_mode = False
+    inner = get_peft_model(base_model, inner_cfg)
+    return PeftModel.from_pretrained(inner, adapter_dir, is_trainable=is_trainable)
+
+
+def _bayesian_peft_choice_lines(choices) -> str:
+    # bayesian-peft's mcdataset formatter accidentally emits "text) label".
+    return "\n".join(
+        f"{text}) {label}"
+        for text, label in zip(choices["text"], choices["label"])
+    )
+
+
+def _answer_key_to_bayesian_peft_index(answer_key, num_classes: int) -> int:
+    answer = str(answer_key).strip()
+    if answer.isdigit():
+        idx = int(answer) - 1
+    else:
+        idx = ord(answer[:1].upper()) - ord("A")
+    if idx < 0 or idx >= int(num_classes):
+        raise ValueError(f"answer label out of range: {answer_key!r}")
+    return idx
+
+
+def preprocess_bayesian_peft_mcqa(
+    task_name: str,
     ds,
     tokenizer: AutoTokenizer,
     max_len: int,
     pad_to_max_length: bool = True,
 ):
-    """Match bayesian-peft's mcdataset ARC setup: A-E logits, no 4-choice filter."""
+    """Match bayesian-peft's mcdataset prompt and target-token setup."""
+    task = str(task_name).lower().strip()
+    num_classes = _task_num_classes(task, bayesian_peft_mcqa_style=True)
 
     def _fn(batch: Dict) -> Dict:
         prompts: List[str] = []
         labels: List[int] = []
-        for question, choices, answer_key in zip(
-            batch["question"],
-            batch["choices"],
-            batch["answerKey"],
-        ):
-            try:
-                label_order = [str(x) for x in choices["label"]]
-                text_by_label = {
-                    str(label): str(text)
-                    for label, text in zip(choices["label"], choices["text"])
-                }
-                choice_lines = "\n".join(
-                    f"{label}) {text_by_label[label]}" for label in label_order
-                )
+
+        if task in {"wgs", "wgm"}:
+            for question, option1, option2, answer in zip(
+                batch["sentence"],
+                batch["option1"],
+                batch["option2"],
+                batch["answer"],
+            ):
                 prompts.append(
                     "Return the label of the correct answer for the question below.\n\n"
                     f"Question: {question}\n"
-                    f"Choices:\n{choice_lines}\n"
+                    "Choices:\n"
+                    f"A) {option1}\n"
+                    f"B) {option2}\n"
                     "Answer:"
                 )
+                labels.append(int(answer) - 1)
 
-                answer = str(answer_key).strip()
-                if answer.isdigit():
-                    y = int(answer) - 1
-                else:
-                    y = answer_key_to_index(answer, get_choice_labels(5))
-                if y < 0 or y >= 5:
-                    raise ValueError(f"ARC label out of range: {answer_key!r}")
-                labels.append(y)
-            except Exception:
-                prompts.append("")
-                labels.append(-1)
+        elif task == "boolq":
+            answers = batch["answer"] if "answer" in batch else batch["label"]
+            for passage, question, answer in zip(
+                batch["passage"],
+                batch["question"],
+                answers,
+            ):
+                prompts.append(
+                    "Read the passage below and answer the question with the words 'true' or 'false'.\n\n"
+                    f"Passage: {str(passage)[:1024]}\n"
+                    f"Question: {question}\n"
+                    "Answer (true or false):"
+                )
+                labels.append(int(answer))
+
+        elif task == "obqa":
+            for question, choices, answer_key in zip(
+                batch["question_stem"],
+                batch["choices"],
+                batch["answerKey"],
+            ):
+                try:
+                    prompts.append(
+                        "Return the label of the correct answer for the question below.\n\n"
+                        f"Question: {question}\n"
+                        "Chioces:\n"
+                        f"{_bayesian_peft_choice_lines(choices)}\n"
+                        "Answer:"
+                    )
+                    labels.append(_answer_key_to_bayesian_peft_index(answer_key, num_classes))
+                except Exception:
+                    prompts.append("")
+                    labels.append(-1)
+
+        elif _is_arc_task(task):
+            for question, choices, answer_key in zip(
+                batch["question"],
+                batch["choices"],
+                batch["answerKey"],
+            ):
+                try:
+                    prompts.append(
+                        "Return the label of the correct answer for the question below.\n\n"
+                        f"Question: {question}\n"
+                        "Choices:\n"
+                        f"{_bayesian_peft_choice_lines(choices)}\n"
+                        "Answer:"
+                    )
+                    labels.append(_answer_key_to_bayesian_peft_index(answer_key, num_classes))
+                except Exception:
+                    prompts.append("")
+                    labels.append(-1)
+
+        else:
+            raise ValueError(f"Unsupported bayesian-peft MCQA task: {task_name}")
 
         enc = _tokenize_prompts(
             tokenizer,
@@ -460,16 +631,28 @@ def preprocess_bayesian_peft_arc(
     )
 
 
+def load_bayesian_peft_mcqa_splits(task_name: str):
+    """Match bayesian-peft's mcdataset raw datasets and validation eval split."""
+    task = str(task_name).lower().strip()
+    if task == "boolq":
+        ds = load_dataset("boolq")
+        return ds["train"], ds["validation"], ds["validation"]
+
+    train_raw, val_raw, _ = load_task_dataset(task_name)
+    return train_raw, val_raw, val_raw
+
+
 def _preprocess_laplace_task(
     task_name: str,
     ds,
     tokenizer: AutoTokenizer,
     max_len: int,
     *,
-    bayesian_peft_arc_style: bool,
+    bayesian_peft_mcqa_style: bool,
 ):
-    if bayesian_peft_arc_style and _is_arc_task(task_name):
-        return preprocess_bayesian_peft_arc(
+    if bayesian_peft_mcqa_style:
+        return preprocess_bayesian_peft_mcqa(
+            task_name,
             ds,
             tokenizer,
             max_len,
@@ -656,6 +839,21 @@ def trim_lm_head_to_choice_tokens(model: nn.Module, choice_token_ids: torch.Tens
         base.config.vocab_size = int(choice_token_ids.numel())
 
 
+def _unwrap_causal_lm(model: nn.Module) -> nn.Module:
+    base = model
+    seen: set[int] = set()
+    while hasattr(base, "get_base_model"):
+        obj_id = id(base)
+        if obj_id in seen:
+            break
+        seen.add(obj_id)
+        next_base = base.get_base_model()
+        if next_base is base:
+            break
+        base = next_base
+    return base
+
+
 class ChoiceRestrictedLoraLMHead(nn.Module):
     """Full-vocab PEFT lm_head restricted to the task's choice-token rows."""
 
@@ -750,20 +948,19 @@ def restrict_full_vocab_lm_head_to_choice_tokens(
     peft_model: PeftModel,
     choice_token_ids: torch.Tensor,
 ) -> None:
-    base = peft_model.get_base_model() if hasattr(peft_model, "get_base_model") else peft_model
-    _, lm_head = get_transformer_and_lm_head(peft_model)
+    base = _unwrap_causal_lm(peft_model)
+    if not hasattr(base, "lm_head"):
+        raise RuntimeError("Could not locate raw lm_head for restricted choice head.")
+    lm_head = base.lm_head
     adapter_name = get_active_adapter_name(peft_model)
     restricted = ChoiceRestrictedLoraLMHead(
         original_lm_head=lm_head,
         choice_token_ids=choice_token_ids,
         adapter_name=adapter_name,
     )
-    if hasattr(base, "lm_head"):
-        base.lm_head = restricted
-    elif hasattr(base, "set_output_embeddings"):
+    base.lm_head = restricted
+    if hasattr(base, "set_output_embeddings"):
         base.set_output_embeddings(restricted)
-    else:
-        raise RuntimeError("Could not replace lm_head with restricted choice head.")
     if hasattr(base, "config") and hasattr(base.config, "vocab_size"):
         base.config.vocab_size = int(choice_token_ids.numel())
 
@@ -1010,6 +1207,7 @@ def main() -> None:
     ap.add_argument("--attn_implementation", type=str, default="sdpa")
     ap.add_argument("--force_refit", action="store_true", help="Ignore saved KFAC/Hessian cache and recompute la.fit().")
     ap.add_argument("--force_reprior", action="store_true", help="Ignore saved prior precision cache and re-optimize prior.")
+    ap.add_argument("--map_only", action="store_true", help="Only evaluate the loaded MAP adapter; skip Laplace fit and MC.")
     args = ap.parse_args()
     args.map_adapter_dir = os.path.abspath(args.map_adapter_dir)
     args.task_name = (
@@ -1039,31 +1237,48 @@ def main() -> None:
     print(f"[Official source Laplace] task={args.task_name} sub={args.laplace_sub} testing_set={args.testing_set}")
     print(f"[Base model] {base_model_name}")
     print(f"[Adapter] {args.map_adapter_dir}")
+    _validate_adapter_weights_file(args.map_adapter_dir)
 
-    tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=True, trust_remote_code=False)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.bos_token if tokenizer.bos_token is not None else tokenizer.eos_token
+    bayesian_peft_mcqa_style = _is_bayesian_peft_mcqa_adapter(
+        args.task_name,
+        args.map_adapter_dir,
+        base_model_name,
+    )
+    if bayesian_peft_mcqa_style:
+        print("[Dataset style] bayesian-peft mcdataset prompt, target tokens, and PEFT load path")
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        base_model_name,
+        use_fast=True,
+        trust_remote_code=bool(bayesian_peft_mcqa_style),
+    )
     tokenizer.padding_side = "left"
+    if bayesian_peft_mcqa_style and args.task_name in {"boolq", "wgs", "wgm"}:
+        tokenizer.add_eos_token = True
+    if bayesian_peft_mcqa_style:
+        tokenizer.pad_token = tokenizer.bos_token
+    elif tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.bos_token if tokenizer.bos_token is not None else tokenizer.eos_token
 
     base = AutoModelForCausalLM.from_pretrained(
         base_model_name,
         torch_dtype=(amp_dtype if device.type == "cuda" else None),
         attn_implementation=args.attn_implementation,
-        trust_remote_code=False,
+        trust_remote_code=bool(bayesian_peft_mcqa_style),
     ).to(device)
     if hasattr(base.config, "use_cache"):
         base.config.use_cache = False
 
-    bayesian_peft_arc_style = _is_bayesian_peft_arc_adapter(
-        args.task_name,
-        args.map_adapter_dir,
-        base_model_name,
-    )
-    if bayesian_peft_arc_style:
-        print("[Dataset style] bayesian-peft ARC mcdataset: using 5 A-E logits without 4-choice filtering")
-
-    num_classes = _task_num_classes(args.task_name, bayesian_peft_arc_style)
-    choice_token_ids = get_choice_token_ids(tokenizer, device, num_classes)
+    num_classes = _task_num_classes(args.task_name, bayesian_peft_mcqa_style)
+    if bayesian_peft_mcqa_style:
+        choice_token_ids = get_bayesian_peft_target_token_ids(
+            tokenizer,
+            device,
+            args.task_name,
+            num_classes,
+        )
+    else:
+        choice_token_ids = get_choice_token_ids(tokenizer, device, num_classes)
     adapter_head = _inspect_adapter_head(args.map_adapter_dir, num_classes)
     print(
         "[Adapter head] "
@@ -1072,11 +1287,25 @@ def main() -> None:
     if adapter_head.mode in {"trimmed_head", "no_lm_head_adapter", "unknown_lm_head_adapter"}:
         trim_lm_head_to_choice_tokens(base, choice_token_ids)
         print(f"[Head] trimmed base lm_head to {num_classes} choice logits before adapter load")
-        model = PeftModel.from_pretrained(base, args.map_adapter_dir, is_trainable=True).to(device)
+        if bayesian_peft_mcqa_style:
+            model = load_bayesian_peft_mle_adapter(
+                base,
+                args.map_adapter_dir,
+                is_trainable=True,
+            ).to(device)
+        else:
+            model = PeftModel.from_pretrained(base, args.map_adapter_dir, is_trainable=True).to(device)
         head_cache_tag = "trimmedhead"
         wrapper_choice_ids = None
     elif adapter_head.mode == "full_vocab_head":
-        model = PeftModel.from_pretrained(base, args.map_adapter_dir, is_trainable=True).to(device)
+        if bayesian_peft_mcqa_style:
+            model = load_bayesian_peft_mle_adapter(
+                base,
+                args.map_adapter_dir,
+                is_trainable=True,
+            ).to(device)
+        else:
+            model = PeftModel.from_pretrained(base, args.map_adapter_dir, is_trainable=True).to(device)
         restrict_full_vocab_lm_head_to_choice_tokens(model, choice_token_ids)
         print(
             f"[Head] loaded full-vocab adapter then restricted lm_head to "
@@ -1100,7 +1329,11 @@ def main() -> None:
         num_classes=num_classes,
     ).to(device)
 
-    train_raw_full, val_raw, test_raw = load_task_dataset(args.task_name)
+    if bayesian_peft_mcqa_style:
+        train_raw_full, val_raw, test_raw = load_bayesian_peft_mcqa_splits(args.task_name)
+        print("[Dataset split] bayesian-peft source eval uses validation split")
+    else:
+        train_raw_full, val_raw, test_raw = load_task_dataset(args.task_name)
     if args.task_name == SCIENCEQA_CURRIC_TASK_NAME:
         train_raw_fit = _order_scienceqa_train_by_grade(train_raw_full, effective_seed)
         prior_raw = val_raw
@@ -1117,7 +1350,7 @@ def main() -> None:
             train_raw_fit,
             tokenizer,
             args.max_length,
-            bayesian_peft_arc_style=bayesian_peft_arc_style,
+            bayesian_peft_mcqa_style=bayesian_peft_mcqa_style,
         )
     )
     iid_prior = _add_seq_len(
@@ -1126,7 +1359,7 @@ def main() -> None:
             prior_raw,
             tokenizer,
             args.max_length,
-            bayesian_peft_arc_style=bayesian_peft_arc_style,
+            bayesian_peft_mcqa_style=bayesian_peft_mcqa_style,
         )
     )
     iid_test = _add_seq_len(
@@ -1135,7 +1368,7 @@ def main() -> None:
             test_raw,
             tokenizer,
             args.max_length,
-            bayesian_peft_arc_style=bayesian_peft_arc_style,
+            bayesian_peft_mcqa_style=bayesian_peft_mcqa_style,
         )
     )
 
@@ -1146,23 +1379,24 @@ def main() -> None:
             continue
         eval_num_classes = _task_num_classes(
             eval_task,
-            bayesian_peft_arc_style and _is_arc_task(eval_task),
+            bayesian_peft_mcqa_style,
         )
         if eval_num_classes != num_classes:
             raise ValueError(
                 f"Eval task {eval_task!r} has {eval_num_classes} classes, "
                 f"but source task {args.task_name!r} has {num_classes}."
             )
-        eval_raw = load_eval_dataset(eval_task)
+        if bayesian_peft_mcqa_style:
+            _, eval_raw, _ = load_bayesian_peft_mcqa_splits(eval_task)
+        else:
+            eval_raw = load_eval_dataset(eval_task)
         eval_task_to_proc[eval_task] = _add_seq_len(
             _preprocess_laplace_task(
                 eval_task,
                 eval_raw,
                 tokenizer,
                 args.max_length,
-                bayesian_peft_arc_style=(
-                    bayesian_peft_arc_style and _is_arc_task(eval_task)
-                ),
+                bayesian_peft_mcqa_style=bayesian_peft_mcqa_style,
             )
         )
 
@@ -1191,7 +1425,34 @@ def main() -> None:
     fit_loader = _make_loader(iid_train, int(args.fit_bsz), shuffle=fit_shuffle, drop_last=False)
     prior_loader = _make_loader(iid_prior, int(args.per_device_eval_batch_size), shuffle=False, drop_last=False)
 
-    dataset_style_tag = "bp_arc5" if bayesian_peft_arc_style else "seq_mcqa"
+    def _eval_map_one(tag: str, proc) -> Dict[str, float]:
+        map_loader = _make_loader(proc, int(args.per_device_eval_batch_size), False, False)
+        with _StageTimer(f"INFER MAP adapter on {tag}"):
+            metrics = eval_map_source_style(
+                model=laplace_model,
+                loader=map_loader,
+                device=device,
+                num_classes=num_classes,
+            )
+        print(
+            f"MAP:  NLL={metrics['nll']:.4f}  ACC={metrics['acc']*100:.2f}%  "
+            f"ECE={metrics['ece']*100:.2f}%  Brier={metrics['brier']:.4f}"
+        )
+        return metrics
+
+    if args.map_only:
+        print(f"\n=== MAP-only evaluation: source={args.task_name} | targets={eval_tasks} ===")
+        for eval_task in eval_tasks:
+            split_name = "test" if eval_task == args.task_name else "ood"
+            proc = eval_task_to_proc[eval_task]
+            print("\n==============================")
+            print(f"[{eval_task}({split_name})] n={len(proc)}")
+            print("==============================")
+            _eval_map_one(f"{eval_task}({split_name})", proc)
+        print("\n[DONE]")
+        return
+
+    dataset_style_tag = "bp_mle_nested_mcqa" if bayesian_peft_mcqa_style else "seq_mcqa"
     subset_tag = f"official_source_{head_cache_tag}_{dataset_style_tag}_{args.laplace_sub}"
     prior_mode = "valsplit" if (args.task_name == SCIENCEQA_CURRIC_TASK_NAME or args.testing_set == "val") else "trainvalsplit"
     fit_cache_path = os.path.join(
@@ -1261,6 +1522,9 @@ def main() -> None:
             prior_precision = torch.as_tensor(prior_payload, device=device, dtype=torch.float32)
             la.prior_precision = prior_precision
             print(f"[Prior] Loaded prior precision from {prior_path}")
+        elif int(args.prior_optim_step) <= 0:
+            print("[Prior] using fixed prior precision from --prior_var; optimization disabled")
+            torch.save(torch.as_tensor(la.prior_precision).detach().cpu(), prior_path)
         elif args.task_name == SCIENCEQA_CURRIC_TASK_NAME or args.testing_set == "val":
             print(f"[Prior] optimizing with method=marglik, steps={int(args.prior_optim_step)}")
             la.optimize_prior_precision(
@@ -1288,6 +1552,7 @@ def main() -> None:
         print(f"[{tag}] n={len(proc)}")
         print("==============================")
 
+        _eval_map_one(tag, proc)
         lap_loader = _make_loader(proc, int(args.laplace_bsz), False, False)
 
         with _StageTimer(f"INFER Official-Source-Laplace on {tag}"):

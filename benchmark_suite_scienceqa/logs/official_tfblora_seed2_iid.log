@@ -1,0 +1,45 @@
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Fri Apr 10 15:58:10 2026).
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Fri Apr 10 15:58:10 2026).
+
+`torch_dtype` is deprecated! Use `dtype` instead!
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+=====================================
+Loaded benchmark_mcdataset source=scienceqa_closedchoice_grade2_11 eval=iid
+=====================================
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[benchmark_mcdataset] train=5991 anchor=500(train) test=2063(scienceqa_closedchoice_grade2_11:test)
+Namespace(seed=2, evaluate=True, checkpoint=False, checkpoint_name='default', nowand=True, wandb_entity='<your_wandb_account>', wandb_project='Bayes LoRA', wandb_name='', dataset='scienceqa_closedchoice_grade2_11', dataset_type='benchmark_mcdataset', max_seq_len=300, modelwrapper='tfblora', model='Qwen/Qwen3-8B-Base', model_type='causallm', load_in_8bit=False, loss='nll', n_epochs=0, max_train_steps=10000, eval_per_steps=6000, early_stop_steps=0, batch_size=32, lr=0.0001, opt='adamw', opt_wd=0.0, warmup_ratio=0.06, adam_epsilon=1e-06, use_slow_tokenizer=False, add_space=False, is_s2s=False, pad_to_max_length=False, eval_steps=0, num_bins=15, load_model_path=None, load_lora_path='iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_2/map_step_2000', load_lora_huggingface_repo=None, log_path='official_tfblora_seed2_iid', testing_set='train_train_test', ood_ori_dataset=None, eval_dataset='iid', anchor_size=500, lora_r=8, lora_alpha=16, lora_dropout=0.05, apply_classhead_lora=True, apply_qkv_head_lora=False, bayes_train_n_samples=10, bayes_eval_n_samples=10, bayes_eval_n_samples_final=10, bayes_eps=0.05, bayes_gamma=8, bayes_kllr=0.02, bayes_beta=0.0036250000000000006, bayes_final_beta=0.18, bayes_flipout=True, bayes_inference_notsample=False, bayes_klreweighting=True, th=0.003, iter=0, conf_jobnum='300929d2-aed7-46d6-9abc-8d33ad84fa79', conf_timestamp='2026-04-10 16:07:28.569641', conf_host='tori', outdim=4, num_samples=5991)
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 13165.87it/s]
+[Head] trimmed lm_head to 4 choice logits
+LoRA Model loaded successfully from local path: iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_2/map_step_2000
+=====================
+trainable params: 6,225,936 || all params: 7,574,647,824 || trainable%: 0.0822
+len(train_loader): 188
+num of epochs: 54
+[TIME] LOAD-STAGE TFBLORA on scienceqa_closedchoice_grade2_11: 6.17 sec (0.10 min)
+[PEAK] LOAD-STAGE TFBLORA on scienceqa_closedchoice_grade2_11: alloc=14.12 GB  reserved=14.26 GB
+[Save] TFB fit info -> checkpoints/tfblora/Qwen/Qwen3-8B-Base/scienceqa_closedchoice_grade2_11/official_tfblora_seed2_iid/tfb_fit.json
+[TIME] FIT TFB on scienceqa_closedchoice_grade2_11(train): 0.20 sec (0.00 min)
+[PEAK] FIT TFB on scienceqa_closedchoice_grade2_11(train): alloc=14.13 GB  reserved=14.28 GB
+[PROGRESS] TFB eval: 1/65 (1.5%)  mc=10
+[PROGRESS] TFB eval: 6/65 (9.2%)  mc=10
+[PROGRESS] TFB eval: 12/65 (18.5%)  mc=10
+[PROGRESS] TFB eval: 18/65 (27.7%)  mc=10
+[PROGRESS] TFB eval: 24/65 (36.9%)  mc=10
+[PROGRESS] TFB eval: 30/65 (46.2%)  mc=10
+[PROGRESS] TFB eval: 36/65 (55.4%)  mc=10
+[PROGRESS] TFB eval: 42/65 (64.6%)  mc=10
+[PROGRESS] TFB eval: 48/65 (73.8%)  mc=10
+[PROGRESS] TFB eval: 54/65 (83.1%)  mc=10
+[PROGRESS] TFB eval: 60/65 (92.3%)  mc=10
+[PROGRESS] TFB eval: 65/65 (100.0%)  mc=10
+[TIME] INFER TFB on scienceqa_closedchoice_grade2_11(test): 251.86 sec (4.20 min)
+[PEAK] INFER TFB on scienceqa_closedchoice_grade2_11(test): alloc=16.18 GB  reserved=17.06 GB
+
+[scienceqa_closedchoice_grade2_11(test)][TFB]
+  NLL=0.1562  ACC=94.67%  ECE=1.47%  Brier=0.0767  mc=10  beta=0.003625  std=0.046143  flip_ratio=0.018905

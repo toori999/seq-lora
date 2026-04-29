@@ -1,0 +1,52 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using device: cuda
+[Protocol] eval_protocol=bayesian_peft
+[Curvature backend] Using ASDL Kron on the full wrapper graph with randomized PSD low-rank compression for large blocks.
+[KFAC] disable_dropout_during_kfac_mu=True
+
+[Load] base_model = meta-llama/Llama-2-7b-hf
+[Load] adapter    = bayesian-peft/checkpoints/mle/meta-llama/Llama-2-7b-hf/obqa/lora-obqa-lr5e-5-bs4-drop0.1-step2000-seed7
+[Protocol] tokenizer.add_eos_token=False
+[Protocol] using direct bayesian-peft dataset wrapper for source task obqa
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights:   0%|          | 1/291 [00:00<00:38,  7.55it/s]Loading weights:  17%|█▋        | 49/291 [00:00<00:01, 210.52it/s]Loading weights:  24%|██▍       | 70/291 [00:00<00:01, 169.85it/s]Loading weights:  30%|███       | 88/291 [00:00<00:01, 155.52it/s]Loading weights:  36%|███▌      | 104/291 [00:00<00:01, 152.37it/s]Loading weights:  47%|████▋     | 136/291 [00:00<00:00, 196.96it/s]Loading weights:  54%|█████▍    | 157/291 [00:00<00:00, 178.27it/s]Loading weights:  62%|██████▏   | 180/291 [00:01<00:00, 188.90it/s]Loading weights:  69%|██████▊   | 200/291 [00:01<00:00, 138.95it/s]Loading weights:  75%|███████▍  | 217/291 [00:01<00:00, 121.43it/s]Loading weights:  81%|████████  | 236/291 [00:01<00:00, 132.81it/s]Loading weights:  89%|████████▊ | 258/291 [00:01<00:00, 152.30it/s]Loading weights:  96%|█████████▌| 280/291 [00:01<00:00, 168.44it/s]Loading weights: 100%|██████████| 291/291 [00:01<00:00, 160.26it/s]
+[Head] keeping full-vocab lm_head (bayesian_peft protocol)
+[Adapter] loaded legacy checkpoint keys=131 remapped=131
+
+[Setup] Casting all LoRA params to float32 for numerical stability...
+[Slices] source=task_train_split[random_10_slices_seed_7] natural_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9] order=sorted order_seed=0 run_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[KFAC] prepared 10 slices from task_train_split[random_10_slices_seed_7]; samples=4957 batches=1240 drop_last=False
+[Posterior Stats Cache] loaded from caches/bayesian_peft_mle_iid_random_T10/obqa_seed7_stats.pt (modules=65 T=10)
+
+=== Independent Slice Ensemble Posterior ===
+[Independent Ensemble] modules=65 T=10 samples_per_slice=10 total_samples=100 prior=P1=1 no_Kalman no_Q
+[TIME] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on obqa: 11.96 sec (0.20 min)
+[PEAK] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on obqa: alloc=13.08 GB  reserved=13.11 GB
+[Tau auto] anchor source=train rows=500 batch_size=96 mc_samples=32
+
+=== Auto-selecting posterior_tau by direct anchor KL estimate ===
+[Tau auto] baseline tau=0.000000 Acc0=86.00% NLL0=0.390786 KL0=0.000631
+[Tau auto] target: 0.050000 <= KL_tau <= 0.052500 (direct_target=0.050000, acc floor logged only: 85.00%) using KL(tau) ~= C * tau^2 within [0, 1.000000]
+[Tau auto] probe tau=0.500000 acc=85.60% nll=0.394696 kl=0.007611 accuracy_ok=1 kl_in_window=0
+[Tau auto] direct estimate from probe: tau=1.000000 = 0.500000 * sqrt(0.050000 / 0.007611)
+[Tau auto] direct tau=1.000000 acc=85.40% nll=0.437593 kl=0.051069 accuracy_ok=1 kl_in_window=1
+[Tau auto] selected posterior_tau=1.000000 source=direct_kl_window anchor_acc=85.40% anchor_nll=0.437593 anchor_kl=0.051069 kl_window=[0.050000, 0.052500]
+[TIME] FIT Seq-LoRA tau on obqa(train_anchor): 277.25 sec (4.62 min)
+[PEAK] FIT Seq-LoRA tau on obqa(train_anchor): alloc=14.24 GB  reserved=16.12 GB
+[Tau] mode=auto effective_posterior_tau=1.000000
+
+=== Evaluation: source=obqa | targets=['obqa'] ===
+[TIME] INFER Seq-LoRA on obqa_iid: 418.13 sec (6.97 min)
+[PEAK] INFER Seq-LoRA on obqa_iid: alloc=14.29 GB  reserved=14.82 GB
+
+[obqa_iid]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.5931
+  brier_bayes: 0.3147
+  ece_bayes: 4.10%
+  acc_bayes: 77.20%
+  kl_map_to_bayes: 0.041480
+  posterior_tau: 1.000000
+  [bayesian-peft style] val_acc: 0.7720000147819519, val_ece: 0.041002653539180756, val_nll: 0.5931121406555175, val_brier: 0.31466247463226316
+  [Timing] Bayes sampling: 418.125s
+
+[Done] Evaluation complete for source task obqa.

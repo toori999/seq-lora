@@ -1,0 +1,117 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using device: cuda
+[Curvature backend] Using ASDL Kron on the full wrapper graph with randomized PSD low-rank compression for large blocks.
+[KFAC] disable_dropout_during_kfac_mu=True
+
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_11/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights:  59%|█████▉    | 236/399 [00:00<00:00, 2115.47it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 2648.69it/s]
+[Head] trimmed lm_head to 4 choice logits
+[KFAC] prepared 10 slices from slices_dir=slice_data/scienceqa_slice_ablation_controls/full_shuffle/seed_11/kfac_balanced; samples=5991 batches=1500 drop_last=False
+
+=== Independent Slice Ensemble Posterior ===
+[Independent Ensemble] modules=73 T=10 samples_per_slice=32 total_samples=320 prior=P1=1 no_Kalman no_Q
+[TIME] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on scienceqa_closedchoice_grade2_11: 11.65 sec (0.19 min)
+[PEAK] TRAIN-STAGE Seq-LoRA posterior sample from cached stats on scienceqa_closedchoice_grade2_11: alloc=14.68 GB  reserved=15.43 GB
+[Tau] mode=fixed effective_posterior_tau=1.000000
+
+=== Evaluation: source=scienceqa_closedchoice_grade2_11 | targets=['scienceqa_closedchoice_grade2_11', 'scienceqa_closedchoice_grade12', 'obqa', 'arc-c', 'mmlu_science_high', 'mmlu_science_college', 'gpqa_main'] ===
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[TIME] INFER Seq-LoRA on scienceqa_closedchoice_grade2_11_iid: 1243.31 sec (20.72 min)
+[PEAK] INFER Seq-LoRA on scienceqa_closedchoice_grade2_11_iid: alloc=15.53 GB  reserved=16.09 GB
+
+[scienceqa_closedchoice_grade2_11_iid]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.1331
+  brier_bayes: 0.0782
+  ece_bayes: 1.48%
+  acc_bayes: 94.13%
+  kl_map_to_bayes: 0.023459
+  posterior_tau: 1.000000
+  [Timing] Bayes sampling: 1243.192s
+[TIME] INFER Seq-LoRA on scienceqa_closedchoice_grade12_ood: 509.15 sec (8.49 min)
+[PEAK] INFER Seq-LoRA on scienceqa_closedchoice_grade12_ood: alloc=15.72 GB  reserved=16.28 GB
+
+[scienceqa_closedchoice_grade12_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.2304
+  brier_bayes: 0.1149
+  ece_bayes: 3.87%
+  acc_bayes: 92.26%
+  kl_map_to_bayes: 0.044223
+  posterior_tau: 1.000000
+  [Timing] Bayes sampling: 509.112s
+
+=== Loading Dataset for Task: obqa ===
+[TIME] INFER Seq-LoRA on obqa_ood: 579.89 sec (9.66 min)
+[PEAK] INFER Seq-LoRA on obqa_ood: alloc=15.28 GB  reserved=15.57 GB
+
+[obqa_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.3734
+  brier_bayes: 0.1764
+  ece_bayes: 4.37%
+  acc_bayes: 87.20%
+  kl_map_to_bayes: 0.053534
+  posterior_tau: 1.000000
+  [Timing] Bayes sampling: 579.855s
+
+=== Loading Dataset for Task: arc-c ===
+[TIME] INFER Seq-LoRA on arc-c_ood: 670.08 sec (11.17 min)
+[PEAK] INFER Seq-LoRA on arc-c_ood: alloc=15.61 GB  reserved=16.12 GB
+
+[arc-c_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.2627
+  brier_bayes: 0.1284
+  ece_bayes: 4.11%
+  acc_bayes: 91.36%
+  kl_map_to_bayes: 0.026823
+  posterior_tau: 1.000000
+  [Timing] Bayes sampling: 670.008s
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[TIME] INFER Seq-LoRA on mmlu_science_high_ood: 180.65 sec (3.01 min)
+[PEAK] INFER Seq-LoRA on mmlu_science_high_ood: alloc=15.79 GB  reserved=16.61 GB
+
+[mmlu_science_high_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.5721
+  brier_bayes: 0.2686
+  ece_bayes: 6.95%
+  acc_bayes: 81.48%
+  kl_map_to_bayes: 0.056934
+  posterior_tau: 1.000000
+  [Timing] Bayes sampling: 180.644s
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[TIME] INFER Seq-LoRA on mmlu_science_college_ood: 93.98 sec (1.57 min)
+[PEAK] INFER Seq-LoRA on mmlu_science_college_ood: alloc=15.58 GB  reserved=16.13 GB
+
+[mmlu_science_college_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.8238
+  brier_bayes: 0.3875
+  ece_bayes: 10.89%
+  acc_bayes: 72.54%
+  kl_map_to_bayes: 0.058338
+  posterior_tau: 1.000000
+  [Timing] Bayes sampling: 93.976s
+[TIME] INFER Seq-LoRA on gpqa_main_ood: 246.37 sec (4.11 min)
+[PEAK] INFER Seq-LoRA on gpqa_main_ood: alloc=16.61 GB  reserved=18.90 GB
+
+[gpqa_main_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 1.6375
+  brier_bayes: 0.8208
+  ece_bayes: 24.58%
+  acc_bayes: 35.49%
+  kl_map_to_bayes: 0.066839
+  posterior_tau: 1.000000
+  [Timing] Bayes sampling: 246.363s
+
+[Done] Evaluation complete for source task scienceqa_closedchoice_grade2_11.

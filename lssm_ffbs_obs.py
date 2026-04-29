@@ -31,9 +31,10 @@ def kalman_filter(
     m1: Tensor,
     P1: Tensor,
 ) -> Tuple[List[Tensor], List[Tensor], List[Tensor], List[Tensor]]:
-    """
+    r"""
     Standard Kalman filter for:
-        x_t = x_{t-1} + u_t,    u_t ~ N(0, Q_t)
+        x_1 ~ N(m1, P1)
+        x_t = x_{t-1} + u_t,    u_t ~ N(0, Q_t), t > 1
         y_t = H_t x_t + eps_t,  eps_t ~ N(0, I)
 
     Args
@@ -43,7 +44,8 @@ def kalman_filter(
     y_list : list of length T
         y_t \in R^{L} (observations in reduced space).
     Q_list : list of length T
-        Q_t \in R^{L x L} (process noise covariances).
+        Q_t \in R^{L x L} (process noise covariances for transitions into t).
+        Q_list[0] is ignored because P1 is already the prior covariance for x_1.
         You can also use a shared Q and repeat it.
     m1 : Tensor, shape (L,)
         Prior mean of x_1.
@@ -85,9 +87,10 @@ def kalman_filter(
         y_t = y_list[t].to(device=device, dtype=dtype)  # (L,)
         Q_t = Q_list[t].to(device=device, dtype=dtype)  # (L,L)
 
-        # Prediction: x_{t|t-1}, P_{t|t-1}
+        # Prediction: x_{t|t-1}, P_{t|t-1}. For t=0, P1 is already
+        # the prior covariance of x_1, so do not add a process-noise term.
         x_t_pred = m_prev.clone()                       # random walk: F = I
-        P_t_pred = P_prev + Q_t
+        P_t_pred = P_prev if t == 0 else P_prev + Q_t
 
         # Innovation covariance: S_t = H P H^T + I
         HP = H_t @ P_t_pred

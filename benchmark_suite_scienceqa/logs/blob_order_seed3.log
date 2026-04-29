@@ -1,0 +1,538 @@
+$ /home/tori/miniconda3_new/envs/seq-lora/bin/python blob_eval_iid_official.py --task scienceqa_closedchoice_grade2_11 --base_model Qwen/Qwen3-8B-Base --map_adapter_dir /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000 --shared_init_lora_path /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/init_lora.pt --save_blob_dir /home/tori/projects/Seq-LoRA/Seq_LoRA/blob_qwen35_8b_scienceqa_leftpad/seed_3/blob --do_train --do_eval --seed 3 --blob_eval_n 10 --eval_tasks iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main
+
+
+[BLoB official-style] [Task] scienceqa_closedchoice_grade2_11 | [Device] cuda
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+`torch_dtype` is deprecated! Use `dtype` instead!
+
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 399/399 [00:00<00:00, 8601.20it/s]
+[Head] trimmed lm_head to 4 choice logits
+[LoRA] r=8 alpha=16 dropout=0.05 target_modules=['lm_head', 'model.layers.0.self_attn.q_proj', 'model.layers.0.self_attn.v_proj', 'model.layers.1.self_attn.q_proj', 'model.layers.1.self_attn.v_proj', 'model.layers.10.self_attn.q_proj', 'model.layers.10.self_attn.v_proj', 'model.layers.11.self_attn.q_proj', 'model.layers.11.self_attn.v_proj', 'model.layers.12.self_attn.q_proj', 'model.layers.12.self_attn.v_proj', 'model.layers.13.self_attn.q_proj', 'model.layers.13.self_attn.v_proj', 'model.layers.14.self_attn.q_proj', 'model.layers.14.self_attn.v_proj', 'model.layers.15.self_attn.q_proj', 'model.layers.15.self_attn.v_proj', 'model.layers.16.self_attn.q_proj', 'model.layers.16.self_attn.v_proj', 'model.layers.17.self_attn.q_proj', 'model.layers.17.self_attn.v_proj', 'model.layers.18.self_attn.q_proj', 'model.layers.18.self_attn.v_proj', 'model.layers.19.self_attn.q_proj', 'model.layers.19.self_attn.v_proj', 'model.layers.2.self_attn.q_proj', 'model.layers.2.self_attn.v_proj', 'model.layers.20.self_attn.q_proj', 'model.layers.20.self_attn.v_proj', 'model.layers.21.self_attn.q_proj', 'model.layers.21.self_attn.v_proj', 'model.layers.22.self_attn.q_proj', 'model.layers.22.self_attn.v_proj', 'model.layers.23.self_attn.q_proj', 'model.layers.23.self_attn.v_proj', 'model.layers.24.self_attn.q_proj', 'model.layers.24.self_attn.v_proj', 'model.layers.25.self_attn.q_proj', 'model.layers.25.self_attn.v_proj', 'model.layers.26.self_attn.q_proj', 'model.layers.26.self_attn.v_proj', 'model.layers.27.self_attn.q_proj', 'model.layers.27.self_attn.v_proj', 'model.layers.28.self_attn.q_proj', 'model.layers.28.self_attn.v_proj', 'model.layers.29.self_attn.q_proj', 'model.layers.29.self_attn.v_proj', 'model.layers.3.self_attn.q_proj', 'model.layers.3.self_attn.v_proj', 'model.layers.30.self_attn.q_proj', 'model.layers.30.self_attn.v_proj', 'model.layers.31.self_attn.q_proj', 'model.layers.31.self_attn.v_proj', 'model.layers.32.self_attn.q_proj', 'model.layers.32.self_attn.v_proj', 'model.layers.33.self_attn.q_proj', 'model.layers.33.self_attn.v_proj', 'model.layers.34.self_attn.q_proj', 'model.layers.34.self_attn.v_proj', 'model.layers.35.self_attn.q_proj', 'model.layers.35.self_attn.v_proj', 'model.layers.4.self_attn.q_proj', 'model.layers.4.self_attn.v_proj', 'model.layers.5.self_attn.q_proj', 'model.layers.5.self_attn.v_proj', 'model.layers.6.self_attn.q_proj', 'model.layers.6.self_attn.v_proj', 'model.layers.7.self_attn.q_proj', 'model.layers.7.self_attn.v_proj', 'model.layers.8.self_attn.q_proj', 'model.layers.8.self_attn.v_proj', 'model.layers.9.self_attn.q_proj', 'model.layers.9.self_attn.v_proj']
+[Init LoRA] loaded shared init from /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/init_lora.pt
+[BLoB official] patched 73 LoRA layers (adapter=blob).
+[BLoB official] forward is patched via wrap_blob_lora_layers(adapter=blob).
+
+=== Loading scienceqa_closedchoice_grade2_11 ===
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+
+Map:   0%|          | 0/5991 [00:00<?, ? examples/s]
+Map:  67%|██████▋   | 4000/5991 [00:00<00:00, 23300.43 examples/s]
+Map: 100%|██████████| 5991/5991 [00:00<00:00, 22093.30 examples/s]
+
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]
+Filter: 100%|██████████| 5991/5991 [00:00<00:00, 48578.26 examples/s]
+Filter: 100%|██████████| 5991/5991 [00:00<00:00, 48257.89 examples/s]
+
+Flattening the indices:   0%|          | 0/5991 [00:00<?, ? examples/s]
+Flattening the indices: 100%|██████████| 5991/5991 [00:00<00:00, 95498.26 examples/s]
+
+=== Loading Dataset for Task: obqa ===
+
+=== Loading Dataset for Task: arc-c ===
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+
+=== TRAIN: BLoB on scienceqa_closedchoice_grade2_11(train) ===
+[KL schedule] datasetrescaling=False M=1497 warmup_steps=120
+[train] step=    0/2000 nll=0.7749 kl_lr=0 pi=0
+[train] step=   50/2000 nll=0.4208 kl_lr=0.00208333 pi=0.000668003
+[train] step=  100/2000 nll=0.0619 kl_lr=0.00416667 pi=0.000668003
+[train] step=  150/2000 nll=0.4461 kl_lr=0.00625 pi=0.000668003
+[train] step=  200/2000 nll=0.0456 kl_lr=0.00833333 pi=0.000668003
+[train] step=  250/2000 nll=0.0206 kl_lr=0.0099734 pi=0.000668003
+[train] step=  300/2000 nll=0.0015 kl_lr=0.00984043 pi=0.000668003
+[train] step=  350/2000 nll=0.1290 kl_lr=0.00970745 pi=0.000668003
+[train] step=  400/2000 nll=0.0040 kl_lr=0.00957447 pi=0.000668003
+[train] step=  450/2000 nll=0.0123 kl_lr=0.00944149 pi=0.000668003
+[train] step=  500/2000 nll=0.0029 kl_lr=0.00930851 pi=0.000668003
+[train] step=  550/2000 nll=0.0098 kl_lr=0.00917553 pi=0.000668003
+[train] step=  600/2000 nll=0.0025 kl_lr=0.00904255 pi=0.000668003
+[train] step=  650/2000 nll=0.0006 kl_lr=0.00890957 pi=0.000668003
+[train] step=  700/2000 nll=0.0062 kl_lr=0.0087766 pi=0.000668003
+[train] step=  750/2000 nll=0.2369 kl_lr=0.00864362 pi=0.000668003
+[train] step=  800/2000 nll=0.1996 kl_lr=0.00851064 pi=0.000668003
+[train] step=  850/2000 nll=0.2078 kl_lr=0.00837766 pi=0.000668003
+[train] step=  900/2000 nll=0.2201 kl_lr=0.00824468 pi=0.000668003
+[train] step=  950/2000 nll=1.1092 kl_lr=0.0081117 pi=0.000668003
+[train] step= 1000/2000 nll=0.9744 kl_lr=0.00797872 pi=0.000668003
+[train] step= 1050/2000 nll=0.1298 kl_lr=0.00784574 pi=0.000668003
+[train] step= 1100/2000 nll=0.5981 kl_lr=0.00771277 pi=0.000668003
+[train] step= 1150/2000 nll=1.0250 kl_lr=0.00757979 pi=0.000668003
+[train] step= 1200/2000 nll=0.0563 kl_lr=0.00744681 pi=0.000668003
+[train] step= 1250/2000 nll=0.2887 kl_lr=0.00731383 pi=0.000668003
+[train] step= 1300/2000 nll=0.3023 kl_lr=0.00718085 pi=0.000668003
+[train] step= 1350/2000 nll=0.4870 kl_lr=0.00704787 pi=0.000668003
+[train] step= 1400/2000 nll=0.7391 kl_lr=0.00691489 pi=0.000668003
+[train] step= 1450/2000 nll=0.0211 kl_lr=0.00678191 pi=0.000668003
+[train] step= 1500/2000 nll=0.0169 kl_lr=0.00664894 pi=0.000668003
+[train] step= 1550/2000 nll=0.0806 kl_lr=0.00651596 pi=0.000668003
+[train] step= 1600/2000 nll=0.0031 kl_lr=0.00638298 pi=0.000668003
+[train] step= 1650/2000 nll=0.0006 kl_lr=0.00625 pi=0.000668003
+[train] step= 1700/2000 nll=0.0014 kl_lr=0.00611702 pi=0.000668003
+[train] step= 1750/2000 nll=0.0067 kl_lr=0.00598404 pi=0.000668003
+[train] step= 1800/2000 nll=0.0023 kl_lr=0.00585106 pi=0.000668003
+[train] step= 1850/2000 nll=0.0019 kl_lr=0.00571809 pi=0.000668003
+[train] step= 1900/2000 nll=0.0006 kl_lr=0.00558511 pi=0.000668003
+[train] step= 1950/2000 nll=0.0018 kl_lr=0.00545213 pi=0.000668003
+[TIME] BLoB TRAIN (scienceqa_closedchoice_grade2_11): 308.20 sec (5.14 min)
+[PEAK] BLoB TRAIN (scienceqa_closedchoice_grade2_11): alloc=21.16 GB  reserved=21.76 GB
+/home/tori/miniconda3_new/envs/seq-lora/lib/python3.12/site-packages/peft/utils/save_and_load.py:279: UserWarning: Setting `save_embedding_layers` to `True` as embedding layers found in `target_modules`.
+  warnings.warn("Setting `save_embedding_layers` to `True` as embedding layers found in `target_modules`.")
+[Save] saved BLoB adapter and rho to: /home/tori/projects/Seq-LoRA/Seq_LoRA/blob_qwen35_8b_scienceqa_leftpad/seed_3/blob
+
+=== EVAL: source=scienceqa_closedchoice_grade2_11 -> target=scienceqa_closedchoice_grade2_11 (test) ===
+
+BLoB mean scienceqa_closedchoice_grade2_11:   0%|          | 0/2063 [00:00<?, ?sample/s]
+BLoB mean scienceqa_closedchoice_grade2_11:   2%|▏         | 32/2063 [00:00<00:07, 278.94sample/s]
+BLoB mean scienceqa_closedchoice_grade2_11:   5%|▍         | 96/2063 [00:00<00:06, 311.31sample/s, avg_s_per_sample=0.003, eta=7s]
+BLoB mean scienceqa_closedchoice_grade2_11:   8%|▊         | 160/2063 [00:00<00:06, 316.09sample/s, avg_s_per_sample=0.003, eta=6s]
+BLoB mean scienceqa_closedchoice_grade2_11:  11%|█         | 224/2063 [00:00<00:05, 319.31sample/s, avg_s_per_sample=0.003, eta=6s]
+BLoB mean scienceqa_closedchoice_grade2_11:  14%|█▍        | 288/2063 [00:00<00:05, 321.48sample/s, avg_s_per_sample=0.003, eta=6s]
+BLoB mean scienceqa_closedchoice_grade2_11:  16%|█▌        | 320/2063 [00:01<00:05, 320.80sample/s, avg_s_per_sample=0.003, eta=6s]
+BLoB mean scienceqa_closedchoice_grade2_11:  17%|█▋        | 352/2063 [00:01<00:05, 320.37sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  19%|█▊        | 384/2063 [00:01<00:05, 319.91sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  20%|██        | 416/2063 [00:01<00:05, 319.50sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  23%|██▎       | 480/2063 [00:01<00:04, 320.78sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  26%|██▋       | 544/2063 [00:01<00:04, 322.43sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  29%|██▉       | 608/2063 [00:01<00:04, 304.71sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  31%|███       | 640/2063 [00:02<00:04, 288.45sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  33%|███▎      | 672/2063 [00:02<00:05, 276.05sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  34%|███▍      | 704/2063 [00:02<00:05, 266.93sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  36%|███▌      | 736/2063 [00:02<00:05, 259.76sample/s, avg_s_per_sample=0.003, eta=5s]
+BLoB mean scienceqa_closedchoice_grade2_11:  37%|███▋      | 768/2063 [00:02<00:05, 254.56sample/s, avg_s_per_sample=0.003, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  39%|███▉      | 800/2063 [00:02<00:05, 250.67sample/s, avg_s_per_sample=0.003, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  40%|████      | 832/2063 [00:02<00:04, 246.90sample/s, avg_s_per_sample=0.003, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  42%|████▏     | 864/2063 [00:03<00:04, 244.40sample/s, avg_s_per_sample=0.003, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  43%|████▎     | 896/2063 [00:03<00:04, 243.27sample/s, avg_s_per_sample=0.003, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  45%|████▍     | 928/2063 [00:03<00:04, 241.68sample/s, avg_s_per_sample=0.003, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  47%|████▋     | 960/2063 [00:03<00:04, 240.57sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  48%|████▊     | 992/2063 [00:03<00:04, 236.13sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  50%|████▉     | 1024/2063 [00:03<00:04, 233.15sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  51%|█████     | 1056/2063 [00:03<00:04, 230.58sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  53%|█████▎    | 1088/2063 [00:03<00:04, 229.42sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  54%|█████▍    | 1120/2063 [00:04<00:04, 227.93sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean scienceqa_closedchoice_grade2_11:  56%|█████▌    | 1152/2063 [00:04<00:04, 227.14sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  57%|█████▋    | 1184/2063 [00:04<00:03, 226.47sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  59%|█████▉    | 1216/2063 [00:04<00:03, 225.80sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  60%|██████    | 1248/2063 [00:04<00:03, 215.95sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  62%|██████▏   | 1280/2063 [00:04<00:03, 207.84sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  64%|██████▎   | 1312/2063 [00:05<00:03, 203.96sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  65%|██████▌   | 1344/2063 [00:05<00:03, 200.94sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  67%|██████▋   | 1376/2063 [00:05<00:03, 198.75sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  68%|██████▊   | 1408/2063 [00:05<00:03, 197.75sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  70%|██████▉   | 1440/2063 [00:05<00:03, 197.21sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean scienceqa_closedchoice_grade2_11:  71%|███████▏  | 1472/2063 [00:05<00:03, 190.65sample/s, avg_s_per_sample=0.004, eta=2s]
+BLoB mean scienceqa_closedchoice_grade2_11:  73%|███████▎  | 1504/2063 [00:06<00:02, 186.35sample/s, avg_s_per_sample=0.004, eta=2s]
+BLoB mean scienceqa_closedchoice_grade2_11:  74%|███████▍  | 1536/2063 [00:06<00:02, 183.37sample/s, avg_s_per_sample=0.004, eta=2s]
+BLoB mean scienceqa_closedchoice_grade2_11:  76%|███████▌  | 1568/2063 [00:06<00:02, 181.27sample/s, avg_s_per_sample=0.004, eta=2s]
+BLoB mean scienceqa_closedchoice_grade2_11:  78%|███████▊  | 1600/2063 [00:06<00:02, 179.85sample/s, avg_s_per_sample=0.004, eta=2s]
+BLoB mean scienceqa_closedchoice_grade2_11:  79%|███████▉  | 1632/2063 [00:06<00:02, 178.99sample/s, avg_s_per_sample=0.004, eta=2s]
+BLoB mean scienceqa_closedchoice_grade2_11:  81%|████████  | 1664/2063 [00:06<00:02, 178.28sample/s, avg_s_per_sample=0.004, eta=2s]
+BLoB mean scienceqa_closedchoice_grade2_11:  82%|████████▏ | 1696/2063 [00:07<00:02, 176.73sample/s, avg_s_per_sample=0.004, eta=2s]
+BLoB mean scienceqa_closedchoice_grade2_11:  84%|████████▍ | 1728/2063 [00:07<00:01, 175.38sample/s, avg_s_per_sample=0.004, eta=2s]
+BLoB mean scienceqa_closedchoice_grade2_11:  85%|████████▌ | 1760/2063 [00:07<00:01, 174.36sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean scienceqa_closedchoice_grade2_11:  87%|████████▋ | 1792/2063 [00:07<00:01, 173.62sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean scienceqa_closedchoice_grade2_11:  88%|████████▊ | 1824/2063 [00:07<00:01, 162.92sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean scienceqa_closedchoice_grade2_11:  90%|████████▉ | 1856/2063 [00:08<00:01, 156.36sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean scienceqa_closedchoice_grade2_11:  92%|█████████▏| 1888/2063 [00:08<00:01, 152.12sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean scienceqa_closedchoice_grade2_11:  93%|█████████▎| 1920/2063 [00:08<00:00, 145.87sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean scienceqa_closedchoice_grade2_11:  95%|█████████▍| 1952/2063 [00:08<00:00, 141.91sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean scienceqa_closedchoice_grade2_11:  96%|█████████▌| 1984/2063 [00:09<00:00, 136.15sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean scienceqa_closedchoice_grade2_11:  98%|█████████▊| 2016/2063 [00:09<00:00, 131.17sample/s, avg_s_per_sample=0.005, eta=0s]
+BLoB mean scienceqa_closedchoice_grade2_11:  99%|█████████▉| 2048/2063 [00:09<00:00, 117.23sample/s, avg_s_per_sample=0.005, eta=0s]
+BLoB mean scienceqa_closedchoice_grade2_11: 100%|██████████| 2063/2063 [00:09<00:00, 107.21sample/s, avg_s_per_sample=0.005, eta=0s]
+                                                                                                                                    
+[TIME] EVAL blob_mean on scienceqa_closedchoice_grade2_11: 9.94 sec (0.17 min)
+[PEAK] EVAL blob_mean on scienceqa_closedchoice_grade2_11: alloc=14.57 GB  reserved=21.76 GB
+
+BLoB samp scienceqa_closedchoice_grade2_11:   0%|          | 0/2063 [00:00<?, ?sample/s]
+BLoB samp scienceqa_closedchoice_grade2_11:   2%|▏         | 32/2063 [00:01<01:08, 29.59sample/s]
+BLoB samp scienceqa_closedchoice_grade2_11:   3%|▎         | 64/2063 [00:02<01:07, 29.73sample/s, avg_s_per_sample=0.034, eta=1m09s]
+BLoB samp scienceqa_closedchoice_grade2_11:   5%|▍         | 96/2063 [00:03<01:06, 29.64sample/s, avg_s_per_sample=0.034, eta=1m07s]
+BLoB samp scienceqa_closedchoice_grade2_11:   6%|▌         | 128/2063 [00:04<01:05, 29.62sample/s, avg_s_per_sample=0.034, eta=1m06s]
+BLoB samp scienceqa_closedchoice_grade2_11:   8%|▊         | 160/2063 [00:05<01:04, 29.60sample/s, avg_s_per_sample=0.034, eta=1m05s]
+BLoB samp scienceqa_closedchoice_grade2_11:   9%|▉         | 192/2063 [00:06<01:03, 29.59sample/s, avg_s_per_sample=0.034, eta=1m04s]
+BLoB samp scienceqa_closedchoice_grade2_11:  11%|█         | 224/2063 [00:07<01:02, 29.58sample/s, avg_s_per_sample=0.034, eta=1m03s]
+BLoB samp scienceqa_closedchoice_grade2_11:  12%|█▏        | 256/2063 [00:08<01:01, 29.57sample/s, avg_s_per_sample=0.034, eta=1m02s]
+BLoB samp scienceqa_closedchoice_grade2_11:  14%|█▍        | 288/2063 [00:09<01:00, 29.56sample/s, avg_s_per_sample=0.034, eta=1m01s]
+BLoB samp scienceqa_closedchoice_grade2_11:  16%|█▌        | 320/2063 [00:10<00:58, 29.56sample/s, avg_s_per_sample=0.034, eta=60s]  
+BLoB samp scienceqa_closedchoice_grade2_11:  17%|█▋        | 352/2063 [00:11<00:57, 29.55sample/s, avg_s_per_sample=0.034, eta=59s]
+BLoB samp scienceqa_closedchoice_grade2_11:  19%|█▊        | 384/2063 [00:16<01:53, 14.80sample/s, avg_s_per_sample=0.034, eta=58s]
+BLoB samp scienceqa_closedchoice_grade2_11:  20%|██        | 416/2063 [00:17<01:34, 17.41sample/s, avg_s_per_sample=0.034, eta=57s]
+BLoB samp scienceqa_closedchoice_grade2_11:  22%|██▏       | 448/2063 [00:18<01:21, 19.82sample/s, avg_s_per_sample=0.034, eta=56s]
+BLoB samp scienceqa_closedchoice_grade2_11:  23%|██▎       | 480/2063 [00:19<01:12, 21.91sample/s, avg_s_per_sample=0.034, eta=55s]
+BLoB samp scienceqa_closedchoice_grade2_11:  25%|██▍       | 512/2063 [00:20<01:05, 23.78sample/s, avg_s_per_sample=0.034, eta=54s]
+BLoB samp scienceqa_closedchoice_grade2_11:  26%|██▋       | 544/2063 [00:21<01:00, 25.29sample/s, avg_s_per_sample=0.034, eta=53s]
+BLoB samp scienceqa_closedchoice_grade2_11:  28%|██▊       | 576/2063 [00:23<00:56, 26.44sample/s, avg_s_per_sample=0.034, eta=51s]
+BLoB samp scienceqa_closedchoice_grade2_11:  29%|██▉       | 608/2063 [00:24<00:58, 25.02sample/s, avg_s_per_sample=0.034, eta=50s]
+BLoB samp scienceqa_closedchoice_grade2_11:  31%|███       | 640/2063 [00:25<00:58, 24.12sample/s, avg_s_per_sample=0.034, eta=50s]
+BLoB samp scienceqa_closedchoice_grade2_11:  33%|███▎      | 672/2063 [00:27<00:59, 23.51sample/s, avg_s_per_sample=0.035, eta=50s]
+BLoB samp scienceqa_closedchoice_grade2_11:  34%|███▍      | 704/2063 [00:28<00:58, 23.09sample/s, avg_s_per_sample=0.035, eta=49s]
+BLoB samp scienceqa_closedchoice_grade2_11:  36%|███▌      | 736/2063 [00:30<00:58, 22.79sample/s, avg_s_per_sample=0.036, eta=49s]
+BLoB samp scienceqa_closedchoice_grade2_11:  37%|███▋      | 768/2063 [00:31<00:57, 22.61sample/s, avg_s_per_sample=0.036, eta=48s]
+BLoB samp scienceqa_closedchoice_grade2_11:  39%|███▉      | 800/2063 [00:33<00:56, 22.48sample/s, avg_s_per_sample=0.037, eta=47s]
+BLoB samp scienceqa_closedchoice_grade2_11:  40%|████      | 832/2063 [00:34<00:54, 22.39sample/s, avg_s_per_sample=0.037, eta=47s]
+BLoB samp scienceqa_closedchoice_grade2_11:  42%|████▏     | 864/2063 [00:36<00:53, 22.33sample/s, avg_s_per_sample=0.037, eta=46s]
+BLoB samp scienceqa_closedchoice_grade2_11:  43%|████▎     | 896/2063 [00:37<00:52, 22.26sample/s, avg_s_per_sample=0.038, eta=45s]
+BLoB samp scienceqa_closedchoice_grade2_11:  45%|████▍     | 928/2063 [00:38<00:51, 22.23sample/s, avg_s_per_sample=0.038, eta=44s]
+BLoB samp scienceqa_closedchoice_grade2_11:  47%|████▋     | 960/2063 [00:40<00:49, 22.23sample/s, avg_s_per_sample=0.038, eta=43s]
+BLoB samp scienceqa_closedchoice_grade2_11:  48%|████▊     | 992/2063 [00:41<00:49, 21.85sample/s, avg_s_per_sample=0.038, eta=42s]
+BLoB samp scienceqa_closedchoice_grade2_11:  50%|████▉     | 1024/2063 [00:43<00:48, 21.55sample/s, avg_s_per_sample=0.039, eta=41s]
+BLoB samp scienceqa_closedchoice_grade2_11:  51%|█████     | 1056/2063 [00:44<00:47, 21.33sample/s, avg_s_per_sample=0.039, eta=40s]
+BLoB samp scienceqa_closedchoice_grade2_11:  53%|█████▎    | 1088/2063 [00:46<00:45, 21.21sample/s, avg_s_per_sample=0.039, eta=39s]
+BLoB samp scienceqa_closedchoice_grade2_11:  54%|█████▍    | 1120/2063 [00:48<00:44, 21.10sample/s, avg_s_per_sample=0.039, eta=38s]
+BLoB samp scienceqa_closedchoice_grade2_11:  56%|█████▌    | 1152/2063 [00:53<01:13, 12.33sample/s, avg_s_per_sample=0.040, eta=37s]
+BLoB samp scienceqa_closedchoice_grade2_11:  57%|█████▋    | 1184/2063 [00:54<01:02, 14.06sample/s, avg_s_per_sample=0.040, eta=36s]
+BLoB samp scienceqa_closedchoice_grade2_11:  59%|█████▉    | 1216/2063 [00:56<00:54, 15.59sample/s, avg_s_per_sample=0.040, eta=35s]
+BLoB samp scienceqa_closedchoice_grade2_11:  60%|██████    | 1248/2063 [00:57<00:50, 16.26sample/s, avg_s_per_sample=0.040, eta=34s]
+BLoB samp scienceqa_closedchoice_grade2_11:  62%|██████▏   | 1280/2063 [00:59<00:46, 16.77sample/s, avg_s_per_sample=0.041, eta=33s]
+BLoB samp scienceqa_closedchoice_grade2_11:  64%|██████▎   | 1312/2063 [01:01<00:43, 17.15sample/s, avg_s_per_sample=0.041, eta=32s]
+BLoB samp scienceqa_closedchoice_grade2_11:  65%|██████▌   | 1344/2063 [01:03<00:41, 17.44sample/s, avg_s_per_sample=0.041, eta=31s]
+BLoB samp scienceqa_closedchoice_grade2_11:  67%|██████▋   | 1376/2063 [01:05<00:38, 17.64sample/s, avg_s_per_sample=0.042, eta=30s]
+BLoB samp scienceqa_closedchoice_grade2_11:  68%|██████▊   | 1408/2063 [01:06<00:36, 17.79sample/s, avg_s_per_sample=0.042, eta=29s]
+BLoB samp scienceqa_closedchoice_grade2_11:  70%|██████▉   | 1440/2063 [01:08<00:34, 17.88sample/s, avg_s_per_sample=0.042, eta=28s]
+BLoB samp scienceqa_closedchoice_grade2_11:  71%|███████▏  | 1472/2063 [01:10<00:33, 17.41sample/s, avg_s_per_sample=0.043, eta=27s]
+BLoB samp scienceqa_closedchoice_grade2_11:  73%|███████▎  | 1504/2063 [01:12<00:32, 17.08sample/s, avg_s_per_sample=0.043, eta=25s]
+BLoB samp scienceqa_closedchoice_grade2_11:  74%|███████▍  | 1536/2063 [01:14<00:31, 16.87sample/s, avg_s_per_sample=0.043, eta=24s]
+BLoB samp scienceqa_closedchoice_grade2_11:  76%|███████▌  | 1568/2063 [01:16<00:29, 16.73sample/s, avg_s_per_sample=0.044, eta=23s]
+BLoB samp scienceqa_closedchoice_grade2_11:  78%|███████▊  | 1600/2063 [01:18<00:27, 16.63sample/s, avg_s_per_sample=0.044, eta=22s]
+BLoB samp scienceqa_closedchoice_grade2_11:  79%|███████▉  | 1632/2063 [01:20<00:26, 16.57sample/s, avg_s_per_sample=0.044, eta=21s]
+BLoB samp scienceqa_closedchoice_grade2_11:  81%|████████  | 1664/2063 [01:22<00:24, 16.52sample/s, avg_s_per_sample=0.045, eta=19s]
+BLoB samp scienceqa_closedchoice_grade2_11:  82%|████████▏ | 1696/2063 [01:24<00:22, 16.39sample/s, avg_s_per_sample=0.045, eta=18s]
+BLoB samp scienceqa_closedchoice_grade2_11:  84%|████████▍ | 1728/2063 [01:29<00:31, 10.53sample/s, avg_s_per_sample=0.045, eta=17s]
+BLoB samp scienceqa_closedchoice_grade2_11:  85%|████████▌ | 1760/2063 [01:31<00:25, 11.73sample/s, avg_s_per_sample=0.046, eta=15s]
+BLoB samp scienceqa_closedchoice_grade2_11:  87%|████████▋ | 1792/2063 [01:33<00:21, 12.77sample/s, avg_s_per_sample=0.046, eta=14s]
+BLoB samp scienceqa_closedchoice_grade2_11:  88%|████████▊ | 1824/2063 [01:36<00:18, 12.92sample/s, avg_s_per_sample=0.046, eta=13s]
+BLoB samp scienceqa_closedchoice_grade2_11:  90%|████████▉ | 1856/2063 [01:38<00:15, 13.02sample/s, avg_s_per_sample=0.047, eta=11s]
+BLoB samp scienceqa_closedchoice_grade2_11:  92%|█████████▏| 1888/2063 [01:40<00:13, 13.11sample/s, avg_s_per_sample=0.047, eta=10s]
+BLoB samp scienceqa_closedchoice_grade2_11:  93%|█████████▎| 1920/2063 [01:43<00:11, 12.88sample/s, avg_s_per_sample=0.048, eta=8s] 
+BLoB samp scienceqa_closedchoice_grade2_11:  95%|█████████▍| 1952/2063 [01:46<00:08, 12.75sample/s, avg_s_per_sample=0.048, eta=7s]
+BLoB samp scienceqa_closedchoice_grade2_11:  96%|█████████▌| 1984/2063 [01:48<00:06, 12.38sample/s, avg_s_per_sample=0.049, eta=5s]
+BLoB samp scienceqa_closedchoice_grade2_11:  98%|█████████▊| 2016/2063 [01:51<00:03, 12.03sample/s, avg_s_per_sample=0.049, eta=4s]
+BLoB samp scienceqa_closedchoice_grade2_11:  99%|█████████▉| 2048/2063 [01:55<00:01, 10.79sample/s, avg_s_per_sample=0.050, eta=2s]
+BLoB samp scienceqa_closedchoice_grade2_11: 100%|██████████| 2063/2063 [01:57<00:00,  9.89sample/s, avg_s_per_sample=0.051, eta=1s]
+                                                                                                                                   
+[TIME] EVAL blob_sample(N=10) on scienceqa_closedchoice_grade2_11: 106.87 sec (1.78 min)
+[PEAK] EVAL blob_sample(N=10) on scienceqa_closedchoice_grade2_11: alloc=14.59 GB  reserved=16.44 GB
+
+[scienceqa_closedchoice_grade2_11(test) Results]
+  BLoB mean  : NLL=0.1539  ACC=92.83%  ECE=2.01%  Brier=0.0924 (N=0)
+  BLoB samp  : NLL=0.1541  ACC=93.02%  ECE=1.69%  Brier=0.0923 (N=10)
+
+=== EVAL: source=scienceqa_closedchoice_grade2_11 -> target=scienceqa_closedchoice_grade12 (ood) ===
+
+BLoB mean scienceqa_closedchoice_grade12:   0%|          | 0/310 [00:00<?, ?sample/s]
+BLoB mean scienceqa_closedchoice_grade12:  10%|█         | 32/310 [00:00<00:01, 218.83sample/s]
+BLoB mean scienceqa_closedchoice_grade12:  21%|██        | 64/310 [00:00<00:01, 220.58sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean scienceqa_closedchoice_grade12:  31%|███       | 96/310 [00:00<00:01, 206.35sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean scienceqa_closedchoice_grade12:  41%|████▏     | 128/310 [00:00<00:00, 201.44sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean scienceqa_closedchoice_grade12:  52%|█████▏    | 160/310 [00:00<00:00, 190.93sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean scienceqa_closedchoice_grade12:  62%|██████▏   | 192/310 [00:00<00:00, 185.65sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean scienceqa_closedchoice_grade12:  72%|███████▏  | 224/310 [00:01<00:00, 180.32sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean scienceqa_closedchoice_grade12:  83%|████████▎ | 256/310 [00:01<00:00, 161.86sample/s, avg_s_per_sample=0.005, eta=0s]
+BLoB mean scienceqa_closedchoice_grade12:  93%|█████████▎| 288/310 [00:01<00:00, 147.50sample/s, avg_s_per_sample=0.006, eta=0s]
+BLoB mean scienceqa_closedchoice_grade12: 100%|██████████| 310/310 [00:02<00:00, 114.15sample/s, avg_s_per_sample=0.006, eta=0s]
+                                                                                                                                
+[TIME] EVAL blob_mean on scienceqa_closedchoice_grade12: 2.02 sec (0.03 min)
+[PEAK] EVAL blob_mean on scienceqa_closedchoice_grade12: alloc=14.56 GB  reserved=16.44 GB
+
+BLoB samp scienceqa_closedchoice_grade12:   0%|          | 0/310 [00:00<?, ?sample/s]
+BLoB samp scienceqa_closedchoice_grade12:  10%|█         | 32/310 [00:05<00:44,  6.26sample/s]
+BLoB samp scienceqa_closedchoice_grade12:  21%|██        | 64/310 [00:06<00:23, 10.65sample/s, avg_s_per_sample=0.048, eta=13s]
+BLoB samp scienceqa_closedchoice_grade12:  31%|███       | 96/310 [00:08<00:16, 13.15sample/s, avg_s_per_sample=0.048, eta=12s]
+BLoB samp scienceqa_closedchoice_grade12:  41%|████▏     | 128/310 [00:10<00:12, 14.77sample/s, avg_s_per_sample=0.050, eta=11s]
+BLoB samp scienceqa_closedchoice_grade12:  52%|█████▏    | 160/310 [00:12<00:09, 15.35sample/s, avg_s_per_sample=0.051, eta=9s] 
+BLoB samp scienceqa_closedchoice_grade12:  62%|██████▏   | 192/310 [00:14<00:07, 15.72sample/s, avg_s_per_sample=0.053, eta=8s]
+BLoB samp scienceqa_closedchoice_grade12:  72%|███████▏  | 224/310 [00:16<00:05, 15.84sample/s, avg_s_per_sample=0.054, eta=6s]
+BLoB samp scienceqa_closedchoice_grade12:  83%|████████▎ | 256/310 [00:18<00:03, 14.56sample/s, avg_s_per_sample=0.056, eta=5s]
+BLoB samp scienceqa_closedchoice_grade12:  93%|█████████▎| 288/310 [00:21<00:01, 13.48sample/s, avg_s_per_sample=0.059, eta=3s]
+BLoB samp scienceqa_closedchoice_grade12: 100%|██████████| 310/310 [00:24<00:00, 10.52sample/s, avg_s_per_sample=0.062, eta=1s]
+                                                                                                                               
+[TIME] EVAL blob_sample(N=10) on scienceqa_closedchoice_grade12: 21.38 sec (0.36 min)
+[PEAK] EVAL blob_sample(N=10) on scienceqa_closedchoice_grade12: alloc=14.57 GB  reserved=15.84 GB
+
+[scienceqa_closedchoice_grade12(ood) Results]
+  BLoB mean  : NLL=0.2821  ACC=90.32%  ECE=5.23%  Brier=0.1536 (N=0)
+  BLoB samp  : NLL=0.2813  ACC=90.65%  ECE=5.08%  Brier=0.1541 (N=10)
+
+=== EVAL: source=scienceqa_closedchoice_grade2_11 -> target=obqa (ood) ===
+
+BLoB mean obqa:   0%|          | 0/500 [00:00<?, ?sample/s]
+BLoB mean obqa:   6%|▋         | 32/500 [00:00<00:01, 314.71sample/s]
+BLoB mean obqa:  19%|█▉        | 96/500 [00:00<00:01, 321.19sample/s, avg_s_per_sample=0.003, eta=1s]
+BLoB mean obqa:  26%|██▌       | 128/500 [00:00<00:01, 319.21sample/s, avg_s_per_sample=0.003, eta=1s]
+BLoB mean obqa:  32%|███▏      | 160/500 [00:00<00:01, 286.54sample/s, avg_s_per_sample=0.003, eta=1s]
+BLoB mean obqa:  38%|███▊      | 192/500 [00:00<00:01, 269.22sample/s, avg_s_per_sample=0.003, eta=1s]
+BLoB mean obqa:  45%|████▍     | 224/500 [00:00<00:01, 258.75sample/s, avg_s_per_sample=0.003, eta=1s]
+BLoB mean obqa:  51%|█████     | 256/500 [00:00<00:00, 252.24sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean obqa:  58%|█████▊    | 288/500 [00:01<00:00, 242.97sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean obqa:  64%|██████▍   | 320/500 [00:01<00:00, 237.39sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean obqa:  70%|███████   | 352/500 [00:01<00:00, 233.80sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean obqa:  77%|███████▋  | 384/500 [00:01<00:00, 230.74sample/s, avg_s_per_sample=0.004, eta=1s]
+BLoB mean obqa:  83%|████████▎ | 416/500 [00:01<00:00, 217.95sample/s, avg_s_per_sample=0.004, eta=0s]
+BLoB mean obqa:  90%|████████▉ | 448/500 [00:01<00:00, 210.34sample/s, avg_s_per_sample=0.004, eta=0s]
+BLoB mean obqa:  96%|█████████▌| 480/500 [00:02<00:00, 198.58sample/s, avg_s_per_sample=0.004, eta=0s]
+                                                                                                      
+[TIME] EVAL blob_mean on obqa: 2.21 sec (0.04 min)
+[PEAK] EVAL blob_mean on obqa: alloc=14.38 GB  reserved=15.84 GB
+
+BLoB samp obqa:   0%|          | 0/500 [00:00<?, ?sample/s]
+BLoB samp obqa:   6%|▋         | 32/500 [00:01<00:16, 29.25sample/s]
+BLoB samp obqa:  13%|█▎        | 64/500 [00:02<00:14, 29.33sample/s, avg_s_per_sample=0.034, eta=16s]
+BLoB samp obqa:  19%|█▉        | 96/500 [00:03<00:13, 29.32sample/s, avg_s_per_sample=0.034, eta=15s]
+BLoB samp obqa:  26%|██▌       | 128/500 [00:04<00:12, 29.36sample/s, avg_s_per_sample=0.034, eta=14s]
+BLoB samp obqa:  32%|███▏      | 160/500 [00:05<00:12, 26.31sample/s, avg_s_per_sample=0.034, eta=13s]
+BLoB samp obqa:  38%|███▊      | 192/500 [00:07<00:12, 24.79sample/s, avg_s_per_sample=0.036, eta=12s]
+BLoB samp obqa:  45%|████▍     | 224/500 [00:08<00:11, 23.90sample/s, avg_s_per_sample=0.038, eta=12s]
+BLoB samp obqa:  51%|█████     | 256/500 [00:13<00:19, 12.74sample/s, avg_s_per_sample=0.039, eta=11s]
+BLoB samp obqa:  58%|█████▊    | 288/500 [00:15<00:14, 14.52sample/s, avg_s_per_sample=0.040, eta=10s]
+BLoB samp obqa:  64%|██████▍   | 320/500 [00:16<00:11, 16.06sample/s, avg_s_per_sample=0.040, eta=9s] 
+BLoB samp obqa:  70%|███████   | 352/500 [00:18<00:08, 17.32sample/s, avg_s_per_sample=0.041, eta=7s]
+BLoB samp obqa:  77%|███████▋  | 384/500 [00:19<00:06, 18.31sample/s, avg_s_per_sample=0.042, eta=6s]
+BLoB samp obqa:  83%|████████▎ | 416/500 [00:21<00:04, 18.30sample/s, avg_s_per_sample=0.042, eta=5s]
+BLoB samp obqa:  90%|████████▉ | 448/500 [00:23<00:02, 18.29sample/s, avg_s_per_sample=0.043, eta=4s]
+BLoB samp obqa:  96%|█████████▌| 480/500 [00:25<00:01, 17.76sample/s, avg_s_per_sample=0.044, eta=2s]
+BLoB samp obqa: 100%|██████████| 500/500 [00:27<00:00, 15.39sample/s, avg_s_per_sample=0.045, eta=1s]
+                                                                                                     
+[TIME] EVAL blob_sample(N=10) on obqa: 23.58 sec (0.39 min)
+[PEAK] EVAL blob_sample(N=10) on obqa: alloc=14.39 GB  reserved=15.22 GB
+
+[obqa(ood) Results]
+  BLoB mean  : NLL=0.3576  ACC=88.40%  ECE=3.74%  Brier=0.1702 (N=0)
+  BLoB samp  : NLL=0.3571  ACC=88.00%  ECE=4.27%  Brier=0.1693 (N=10)
+
+=== EVAL: source=scienceqa_closedchoice_grade2_11 -> target=arc-c (ood) ===
+
+BLoB mean arc-c:   0%|          | 0/1172 [00:00<?, ?sample/s]
+BLoB mean arc-c:   3%|▎         | 32/1172 [00:00<00:03, 309.73sample/s]
+BLoB mean arc-c:   5%|▌         | 64/1172 [00:00<00:04, 263.55sample/s, avg_s_per_sample=0.003, eta=4s]
+BLoB mean arc-c:   8%|▊         | 96/1172 [00:00<00:04, 253.11sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  11%|█         | 128/1172 [00:00<00:04, 247.91sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  14%|█▎        | 160/1172 [00:00<00:04, 244.46sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  16%|█▋        | 192/1172 [00:00<00:04, 237.74sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  19%|█▉        | 224/1172 [00:00<00:04, 233.28sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  22%|██▏       | 256/1172 [00:01<00:03, 230.45sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  25%|██▍       | 288/1172 [00:01<00:03, 228.76sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  27%|██▋       | 320/1172 [00:01<00:03, 217.42sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  30%|███       | 352/1172 [00:01<00:03, 209.98sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  33%|███▎      | 384/1172 [00:01<00:03, 204.99sample/s, avg_s_per_sample=0.004, eta=4s]
+BLoB mean arc-c:  35%|███▌      | 416/1172 [00:01<00:03, 201.98sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean arc-c:  38%|███▊      | 448/1172 [00:02<00:03, 200.01sample/s, avg_s_per_sample=0.004, eta=3s]
+BLoB mean arc-c:  41%|████      | 480/1172 [00:02<00:03, 191.69sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean arc-c:  44%|████▎     | 512/1172 [00:02<00:03, 187.22sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean arc-c:  46%|████▋     | 544/1172 [00:02<00:03, 184.17sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean arc-c:  49%|████▉     | 576/1172 [00:02<00:03, 182.03sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean arc-c:  52%|█████▏    | 608/1172 [00:02<00:03, 180.44sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean arc-c:  55%|█████▍    | 640/1172 [00:03<00:02, 178.21sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean arc-c:  57%|█████▋    | 672/1172 [00:03<00:02, 176.14sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean arc-c:  60%|██████    | 704/1172 [00:03<00:02, 175.01sample/s, avg_s_per_sample=0.005, eta=2s]
+BLoB mean arc-c:  63%|██████▎   | 736/1172 [00:03<00:02, 174.03sample/s, avg_s_per_sample=0.005, eta=2s]
+BLoB mean arc-c:  66%|██████▌   | 768/1172 [00:03<00:02, 173.66sample/s, avg_s_per_sample=0.005, eta=2s]
+BLoB mean arc-c:  68%|██████▊   | 800/1172 [00:04<00:02, 162.79sample/s, avg_s_per_sample=0.005, eta=2s]
+BLoB mean arc-c:  71%|███████   | 832/1172 [00:04<00:02, 156.18sample/s, avg_s_per_sample=0.005, eta=2s]
+BLoB mean arc-c:  74%|███████▎  | 864/1172 [00:04<00:02, 151.88sample/s, avg_s_per_sample=0.005, eta=2s]
+BLoB mean arc-c:  76%|███████▋  | 896/1172 [00:04<00:01, 145.42sample/s, avg_s_per_sample=0.005, eta=2s]
+BLoB mean arc-c:  79%|███████▉  | 928/1172 [00:05<00:01, 141.17sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean arc-c:  82%|████████▏ | 960/1172 [00:05<00:01, 138.63sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean arc-c:  85%|████████▍ | 992/1172 [00:05<00:01, 133.63sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean arc-c:  87%|████████▋ | 1024/1172 [00:05<00:01, 130.43sample/s, avg_s_per_sample=0.006, eta=1s]
+BLoB mean arc-c:  90%|█████████ | 1056/1172 [00:06<00:00, 127.42sample/s, avg_s_per_sample=0.006, eta=1s]
+BLoB mean arc-c:  93%|█████████▎| 1088/1172 [00:06<00:00, 125.22sample/s, avg_s_per_sample=0.006, eta=1s]
+BLoB mean arc-c:  96%|█████████▌| 1120/1172 [00:06<00:00, 121.53sample/s, avg_s_per_sample=0.006, eta=0s]
+BLoB mean arc-c:  98%|█████████▊| 1152/1172 [00:06<00:00, 111.76sample/s, avg_s_per_sample=0.006, eta=0s]
+BLoB mean arc-c: 100%|██████████| 1172/1172 [00:07<00:00, 94.59sample/s, avg_s_per_sample=0.006, eta=0s] 
+                                                                                                        
+[TIME] EVAL blob_mean on arc-c: 7.27 sec (0.12 min)
+[PEAK] EVAL blob_mean on arc-c: alloc=14.57 GB  reserved=16.61 GB
+
+BLoB samp arc-c:   0%|          | 0/1172 [00:00<?, ?sample/s]
+BLoB samp arc-c:   3%|▎         | 32/1172 [00:01<00:38, 29.49sample/s]
+BLoB samp arc-c:   5%|▌         | 64/1172 [00:02<00:44, 24.88sample/s, avg_s_per_sample=0.034, eta=39s]
+BLoB samp arc-c:   8%|▊         | 96/1172 [00:03<00:45, 23.67sample/s, avg_s_per_sample=0.039, eta=43s]
+BLoB samp arc-c:  11%|█         | 128/1172 [00:05<00:45, 23.16sample/s, avg_s_per_sample=0.041, eta=44s]
+BLoB samp arc-c:  14%|█▎        | 160/1172 [00:06<00:45, 22.28sample/s, avg_s_per_sample=0.042, eta=44s]
+BLoB samp arc-c:  16%|█▋        | 192/1172 [00:08<00:46, 21.09sample/s, avg_s_per_sample=0.043, eta=44s]
+BLoB samp arc-c:  19%|█▉        | 224/1172 [00:10<00:46, 20.42sample/s, avg_s_per_sample=0.045, eta=44s]
+BLoB samp arc-c:  22%|██▏       | 256/1172 [00:15<01:14, 12.34sample/s, avg_s_per_sample=0.046, eta=43s]
+BLoB samp arc-c:  25%|██▍       | 288/1172 [00:16<01:03, 13.88sample/s, avg_s_per_sample=0.047, eta=43s]
+BLoB samp arc-c:  27%|██▋       | 320/1172 [00:18<00:58, 14.59sample/s, avg_s_per_sample=0.047, eta=42s]
+BLoB samp arc-c:  30%|███       | 352/1172 [00:20<00:54, 15.11sample/s, avg_s_per_sample=0.049, eta=41s]
+BLoB samp arc-c:  33%|███▎      | 384/1172 [00:22<00:50, 15.50sample/s, avg_s_per_sample=0.050, eta=41s]
+BLoB samp arc-c:  35%|███▌      | 416/1172 [00:24<00:47, 15.80sample/s, avg_s_per_sample=0.051, eta=40s]
+BLoB samp arc-c:  38%|███▊      | 448/1172 [00:26<00:44, 16.29sample/s, avg_s_per_sample=0.051, eta=39s]
+BLoB samp arc-c:  41%|████      | 480/1172 [00:28<00:42, 16.27sample/s, avg_s_per_sample=0.052, eta=37s]
+BLoB samp arc-c:  44%|████▎     | 512/1172 [00:30<00:40, 16.25sample/s, avg_s_per_sample=0.052, eta=36s]
+BLoB samp arc-c:  46%|████▋     | 544/1172 [00:32<00:38, 16.23sample/s, avg_s_per_sample=0.053, eta=35s]
+BLoB samp arc-c:  49%|████▉     | 576/1172 [00:34<00:36, 16.21sample/s, avg_s_per_sample=0.054, eta=34s]
+BLoB samp arc-c:  52%|█████▏    | 608/1172 [00:36<00:34, 16.17sample/s, avg_s_per_sample=0.054, eta=32s]
+BLoB samp arc-c:  55%|█████▍    | 640/1172 [00:38<00:33, 16.03sample/s, avg_s_per_sample=0.054, eta=31s]
+BLoB samp arc-c:  57%|█████▋    | 672/1172 [00:40<00:31, 15.90sample/s, avg_s_per_sample=0.055, eta=29s]
+BLoB samp arc-c:  60%|██████    | 704/1172 [00:42<00:30, 15.56sample/s, avg_s_per_sample=0.055, eta=28s]
+BLoB samp arc-c:  63%|██████▎   | 736/1172 [00:44<00:28, 15.24sample/s, avg_s_per_sample=0.056, eta=26s]
+BLoB samp arc-c:  66%|██████▌   | 768/1172 [00:48<00:32, 12.44sample/s, avg_s_per_sample=0.056, eta=25s]
+BLoB samp arc-c:  68%|██████▊   | 800/1172 [00:50<00:29, 12.53sample/s, avg_s_per_sample=0.057, eta=23s]
+BLoB samp arc-c:  71%|███████   | 832/1172 [00:53<00:26, 12.70sample/s, avg_s_per_sample=0.058, eta=21s]
+BLoB samp arc-c:  74%|███████▎  | 864/1172 [00:55<00:24, 12.82sample/s, avg_s_per_sample=0.058, eta=20s]
+BLoB samp arc-c:  76%|███████▋  | 896/1172 [00:58<00:21, 12.63sample/s, avg_s_per_sample=0.059, eta=18s]
+BLoB samp arc-c:  79%|███████▉  | 928/1172 [01:00<00:19, 12.43sample/s, avg_s_per_sample=0.060, eta=17s]
+BLoB samp arc-c:  82%|████████▏ | 960/1172 [01:03<00:17, 12.30sample/s, avg_s_per_sample=0.061, eta=15s]
+BLoB samp arc-c:  85%|████████▍ | 992/1172 [01:06<00:15, 11.93sample/s, avg_s_per_sample=0.062, eta=13s]
+BLoB samp arc-c:  87%|████████▋ | 1024/1172 [01:09<00:12, 11.48sample/s, avg_s_per_sample=0.062, eta=11s]
+BLoB samp arc-c:  90%|█████████ | 1056/1172 [01:12<00:10, 11.09sample/s, avg_s_per_sample=0.063, eta=9s] 
+BLoB samp arc-c:  93%|█████████▎| 1088/1172 [01:15<00:07, 10.82sample/s, avg_s_per_sample=0.064, eta=7s]
+BLoB samp arc-c:  96%|█████████▌| 1120/1172 [01:19<00:04, 10.42sample/s, avg_s_per_sample=0.065, eta=5s]
+BLoB samp arc-c:  98%|█████████▊| 1152/1172 [01:24<00:02,  8.38sample/s, avg_s_per_sample=0.067, eta=3s]
+BLoB samp arc-c: 100%|██████████| 1172/1172 [01:28<00:00,  7.36sample/s, avg_s_per_sample=0.068, eta=1s]
+                                                                                                        
+[TIME] EVAL blob_sample(N=10) on arc-c: 82.55 sec (1.38 min)
+[PEAK] EVAL blob_sample(N=10) on arc-c: alloc=14.59 GB  reserved=16.67 GB
+
+[arc-c(ood) Results]
+  BLoB mean  : NLL=0.2716  ACC=91.30%  ECE=4.59%  Brier=0.1312 (N=0)
+  BLoB samp  : NLL=0.2689  ACC=91.21%  ECE=4.34%  Brier=0.1300 (N=10)
+
+=== EVAL: source=scienceqa_closedchoice_grade2_11 -> target=mmlu_science_high (ood) ===
+
+BLoB mean mmlu_science_high:   0%|          | 0/664 [00:00<?, ?sample/s]
+BLoB mean mmlu_science_high:   5%|▍         | 32/664 [00:00<00:02, 211.30sample/s]
+BLoB mean mmlu_science_high:  10%|▉         | 64/664 [00:00<00:02, 206.70sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean mmlu_science_high:  14%|█▍        | 96/664 [00:00<00:02, 205.87sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean mmlu_science_high:  19%|█▉        | 128/664 [00:00<00:02, 192.11sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean mmlu_science_high:  24%|██▍       | 160/664 [00:00<00:02, 178.49sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean mmlu_science_high:  29%|██▉       | 192/664 [00:01<00:02, 171.79sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean mmlu_science_high:  34%|███▎      | 224/664 [00:01<00:02, 166.40sample/s, avg_s_per_sample=0.005, eta=3s]
+BLoB mean mmlu_science_high:  39%|███▊      | 256/664 [00:01<00:02, 162.92sample/s, avg_s_per_sample=0.006, eta=2s]
+BLoB mean mmlu_science_high:  43%|████▎     | 288/664 [00:01<00:02, 150.44sample/s, avg_s_per_sample=0.006, eta=2s]
+BLoB mean mmlu_science_high:  48%|████▊     | 320/664 [00:01<00:02, 143.25sample/s, avg_s_per_sample=0.006, eta=2s]
+BLoB mean mmlu_science_high:  53%|█████▎    | 352/664 [00:02<00:02, 135.33sample/s, avg_s_per_sample=0.006, eta=2s]
+BLoB mean mmlu_science_high:  58%|█████▊    | 384/664 [00:02<00:02, 130.33sample/s, avg_s_per_sample=0.006, eta=2s]
+BLoB mean mmlu_science_high:  63%|██████▎   | 416/664 [00:02<00:01, 124.12sample/s, avg_s_per_sample=0.006, eta=2s]
+BLoB mean mmlu_science_high:  67%|██████▋   | 448/664 [00:03<00:01, 120.31sample/s, avg_s_per_sample=0.007, eta=2s]
+BLoB mean mmlu_science_high:  72%|███████▏  | 480/664 [00:03<00:01, 117.47sample/s, avg_s_per_sample=0.007, eta=1s]
+BLoB mean mmlu_science_high:  77%|███████▋  | 512/664 [00:03<00:01, 114.82sample/s, avg_s_per_sample=0.007, eta=1s]
+BLoB mean mmlu_science_high:  82%|████████▏ | 544/664 [00:03<00:01, 107.32sample/s, avg_s_per_sample=0.007, eta=1s]
+BLoB mean mmlu_science_high:  87%|████████▋ | 576/664 [00:04<00:00, 101.48sample/s, avg_s_per_sample=0.007, eta=1s]
+BLoB mean mmlu_science_high:  92%|█████████▏| 608/664 [00:04<00:00, 93.88sample/s, avg_s_per_sample=0.008, eta=1s] 
+BLoB mean mmlu_science_high:  96%|█████████▋| 640/664 [00:05<00:00, 84.54sample/s, avg_s_per_sample=0.008, eta=0s]
+BLoB mean mmlu_science_high: 100%|██████████| 664/664 [00:05<00:00, 69.97sample/s, avg_s_per_sample=0.008, eta=0s]
+                                                                                                                  
+[TIME] EVAL blob_mean on mmlu_science_high: 5.74 sec (0.10 min)
+[PEAK] EVAL blob_mean on mmlu_science_high: alloc=14.79 GB  reserved=18.03 GB
+
+BLoB samp mmlu_science_high:   0%|          | 0/664 [00:00<?, ?sample/s]
+BLoB samp mmlu_science_high:   5%|▍         | 32/664 [00:01<00:29, 21.23sample/s]
+BLoB samp mmlu_science_high:  10%|▉         | 64/664 [00:03<00:29, 20.50sample/s, avg_s_per_sample=0.047, eta=30s]
+BLoB samp mmlu_science_high:  14%|█▍        | 96/664 [00:04<00:27, 20.31sample/s, avg_s_per_sample=0.049, eta=29s]
+BLoB samp mmlu_science_high:  19%|█▉        | 128/664 [00:06<00:28, 18.81sample/s, avg_s_per_sample=0.049, eta=28s]
+BLoB samp mmlu_science_high:  24%|██▍       | 160/664 [00:08<00:29, 17.22sample/s, avg_s_per_sample=0.052, eta=28s]
+BLoB samp mmlu_science_high:  29%|██▉       | 192/664 [00:10<00:28, 16.40sample/s, avg_s_per_sample=0.055, eta=27s]
+BLoB samp mmlu_science_high:  34%|███▎      | 224/664 [00:12<00:27, 16.21sample/s, avg_s_per_sample=0.057, eta=27s]
+BLoB samp mmlu_science_high:  39%|███▊      | 256/664 [00:14<00:25, 15.84sample/s, avg_s_per_sample=0.058, eta=25s]
+BLoB samp mmlu_science_high:  43%|████▎     | 288/664 [00:17<00:25, 14.53sample/s, avg_s_per_sample=0.059, eta=24s]
+BLoB samp mmlu_science_high:  48%|████▊     | 320/664 [00:21<00:28, 12.28sample/s, avg_s_per_sample=0.061, eta=23s]
+BLoB samp mmlu_science_high:  53%|█████▎    | 352/664 [00:23<00:25, 12.20sample/s, avg_s_per_sample=0.063, eta=22s]
+BLoB samp mmlu_science_high:  58%|█████▊    | 384/664 [00:26<00:23, 12.06sample/s, avg_s_per_sample=0.065, eta=20s]
+BLoB samp mmlu_science_high:  63%|██████▎   | 416/664 [00:29<00:21, 11.71sample/s, avg_s_per_sample=0.066, eta=19s]
+BLoB samp mmlu_science_high:  67%|██████▋   | 448/664 [00:32<00:18, 11.38sample/s, avg_s_per_sample=0.068, eta=17s]
+BLoB samp mmlu_science_high:  72%|███████▏  | 480/664 [00:35<00:16, 11.01sample/s, avg_s_per_sample=0.070, eta=15s]
+BLoB samp mmlu_science_high:  77%|███████▋  | 512/664 [00:38<00:14, 10.77sample/s, avg_s_per_sample=0.072, eta=13s]
+BLoB samp mmlu_science_high:  82%|████████▏ | 544/664 [00:42<00:12,  9.87sample/s, avg_s_per_sample=0.074, eta=11s]
+BLoB samp mmlu_science_high:  87%|████████▋ | 576/664 [00:46<00:09,  9.32sample/s, avg_s_per_sample=0.076, eta=9s] 
+BLoB samp mmlu_science_high:  92%|█████████▏| 608/664 [00:51<00:06,  8.44sample/s, avg_s_per_sample=0.079, eta=7s]
+BLoB samp mmlu_science_high:  96%|█████████▋| 640/664 [00:57<00:03,  7.04sample/s, avg_s_per_sample=0.082, eta=5s]
+BLoB samp mmlu_science_high: 100%|██████████| 664/664 [01:03<00:00,  5.99sample/s, avg_s_per_sample=0.086, eta=2s]
+                                                                                                                  
+[TIME] EVAL blob_sample(N=10) on mmlu_science_high: 61.08 sec (1.02 min)
+[PEAK] EVAL blob_sample(N=10) on mmlu_science_high: alloc=14.81 GB  reserved=18.10 GB
+
+[mmlu_science_high(ood) Results]
+  BLoB mean  : NLL=0.5729  ACC=82.08%  ECE=6.53%  Brier=0.2600 (N=0)
+  BLoB samp  : NLL=0.5734  ACC=81.17%  ECE=7.28%  Brier=0.2608 (N=10)
+
+=== EVAL: source=scienceqa_closedchoice_grade2_11 -> target=mmlu_science_college (ood) ===
+
+BLoB mean mmlu_science_college:   0%|          | 0/346 [00:00<?, ?sample/s]
+BLoB mean mmlu_science_college:   9%|▉         | 32/346 [00:00<00:01, 217.99sample/s]
+BLoB mean mmlu_science_college:  18%|█▊        | 64/346 [00:00<00:01, 220.45sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean mmlu_science_college:  28%|██▊       | 96/346 [00:00<00:01, 196.06sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean mmlu_science_college:  37%|███▋      | 128/346 [00:00<00:01, 179.93sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean mmlu_science_college:  46%|████▌     | 160/346 [00:00<00:01, 157.52sample/s, avg_s_per_sample=0.005, eta=1s]
+BLoB mean mmlu_science_college:  55%|█████▌    | 192/346 [00:01<00:01, 146.82sample/s, avg_s_per_sample=0.006, eta=1s]
+BLoB mean mmlu_science_college:  65%|██████▍   | 224/346 [00:01<00:00, 133.37sample/s, avg_s_per_sample=0.006, eta=1s]
+BLoB mean mmlu_science_college:  74%|███████▍  | 256/346 [00:01<00:00, 124.87sample/s, avg_s_per_sample=0.006, eta=1s]
+BLoB mean mmlu_science_college:  83%|████████▎ | 288/346 [00:02<00:00, 117.16sample/s, avg_s_per_sample=0.007, eta=1s]
+BLoB mean mmlu_science_college:  92%|█████████▏| 320/346 [00:02<00:00, 102.77sample/s, avg_s_per_sample=0.007, eta=0s]
+BLoB mean mmlu_science_college: 100%|██████████| 346/346 [00:02<00:00, 80.13sample/s, avg_s_per_sample=0.008, eta=0s] 
+                                                                                                                     
+[TIME] EVAL blob_mean on mmlu_science_college: 2.98 sec (0.05 min)
+[PEAK] EVAL blob_mean on mmlu_science_college: alloc=14.74 GB  reserved=18.10 GB
+
+BLoB samp mmlu_science_college:   0%|          | 0/346 [00:00<?, ?sample/s]
+BLoB samp mmlu_science_college:   9%|▉         | 32/346 [00:01<00:16, 18.98sample/s]
+BLoB samp mmlu_science_college:  18%|█▊        | 64/346 [00:03<00:14, 19.36sample/s, avg_s_per_sample=0.053, eta=17s]
+BLoB samp mmlu_science_college:  28%|██▊       | 96/346 [00:05<00:14, 17.83sample/s, avg_s_per_sample=0.052, eta=15s]
+BLoB samp mmlu_science_college:  37%|███▋      | 128/346 [00:07<00:13, 16.66sample/s, avg_s_per_sample=0.055, eta=14s]
+BLoB samp mmlu_science_college:  46%|████▌     | 160/346 [00:10<00:12, 14.69sample/s, avg_s_per_sample=0.058, eta=13s]
+BLoB samp mmlu_science_college:  55%|█████▌    | 192/346 [00:12<00:11, 13.81sample/s, avg_s_per_sample=0.063, eta=12s]
+BLoB samp mmlu_science_college:  65%|██████▍   | 224/346 [00:15<00:09, 12.65sample/s, avg_s_per_sample=0.066, eta=10s]
+BLoB samp mmlu_science_college:  74%|███████▍  | 256/346 [00:18<00:07, 11.78sample/s, avg_s_per_sample=0.070, eta=8s] 
+BLoB samp mmlu_science_college:  83%|████████▎ | 288/346 [00:22<00:05, 10.04sample/s, avg_s_per_sample=0.073, eta=7s]
+BLoB samp mmlu_science_college:  92%|█████████▏| 320/346 [00:27<00:02,  9.17sample/s, avg_s_per_sample=0.076, eta=4s]
+BLoB samp mmlu_science_college: 100%|██████████| 346/346 [00:32<00:00,  7.34sample/s, avg_s_per_sample=0.081, eta=2s]
+                                                                                                                     
+[TIME] EVAL blob_sample(N=10) on mmlu_science_college: 31.54 sec (0.53 min)
+[PEAK] EVAL blob_sample(N=10) on mmlu_science_college: alloc=14.76 GB  reserved=16.60 GB
+
+[mmlu_science_college(ood) Results]
+  BLoB mean  : NLL=0.8064  ACC=74.28%  ECE=9.08%  Brier=0.3666 (N=0)
+  BLoB samp  : NLL=0.8037  ACC=75.14%  ECE=8.36%  Brier=0.3654 (N=10)
+
+=== EVAL: source=scienceqa_closedchoice_grade2_11 -> target=gpqa_main (ood) ===
+
+BLoB mean gpqa_main:   0%|          | 0/448 [00:00<?, ?sample/s]
+BLoB mean gpqa_main:   7%|▋         | 32/448 [00:00<00:03, 119.46sample/s]
+BLoB mean gpqa_main:  14%|█▍        | 64/448 [00:00<00:03, 109.99sample/s, avg_s_per_sample=0.008, eta=3s]
+BLoB mean gpqa_main:  21%|██▏       | 96/448 [00:00<00:03, 97.15sample/s, avg_s_per_sample=0.009, eta=3s] 
+BLoB mean gpqa_main:  29%|██▊       | 128/448 [00:01<00:03, 89.05sample/s, avg_s_per_sample=0.010, eta=3s]
+BLoB mean gpqa_main:  36%|███▌      | 160/448 [00:01<00:03, 83.54sample/s, avg_s_per_sample=0.011, eta=3s]
+BLoB mean gpqa_main:  43%|████▎     | 192/448 [00:02<00:03, 76.14sample/s, avg_s_per_sample=0.011, eta=3s]
+BLoB mean gpqa_main:  50%|█████     | 224/448 [00:02<00:03, 70.45sample/s, avg_s_per_sample=0.012, eta=3s]
+BLoB mean gpqa_main:  57%|█████▋    | 256/448 [00:03<00:02, 65.73sample/s, avg_s_per_sample=0.012, eta=3s]
+BLoB mean gpqa_main:  64%|██████▍   | 288/448 [00:03<00:02, 62.51sample/s, avg_s_per_sample=0.013, eta=3s]
+BLoB mean gpqa_main:  71%|███████▏  | 320/448 [00:04<00:02, 59.50sample/s, avg_s_per_sample=0.014, eta=2s]
+BLoB mean gpqa_main:  79%|███████▊  | 352/448 [00:05<00:01, 55.05sample/s, avg_s_per_sample=0.014, eta=2s]
+BLoB mean gpqa_main:  86%|████████▌ | 384/448 [00:05<00:01, 49.88sample/s, avg_s_per_sample=0.015, eta=1s]
+BLoB mean gpqa_main:  93%|█████████▎| 416/448 [00:06<00:00, 45.49sample/s, avg_s_per_sample=0.016, eta=1s]
+BLoB mean gpqa_main: 100%|██████████| 448/448 [00:07<00:00, 42.89sample/s, avg_s_per_sample=0.016, eta=1s]
+                                                                                                          
+[TIME] EVAL blob_mean on gpqa_main: 7.67 sec (0.13 min)
+[PEAK] EVAL blob_mean on gpqa_main: alloc=15.11 GB  reserved=19.49 GB
+
+BLoB samp gpqa_main:   0%|          | 0/448 [00:00<?, ?sample/s]
+BLoB samp gpqa_main:   7%|▋         | 32/448 [00:02<00:36, 11.27sample/s]
+BLoB samp gpqa_main:  14%|█▍        | 64/448 [00:06<00:36, 10.45sample/s, avg_s_per_sample=0.089, eta=37s]
+BLoB samp gpqa_main:  21%|██▏       | 96/448 [00:10<00:38,  9.15sample/s, avg_s_per_sample=0.095, eta=36s]
+BLoB samp gpqa_main:  29%|██▊       | 128/448 [00:15<00:42,  7.58sample/s, avg_s_per_sample=0.105, eta=37s]
+BLoB samp gpqa_main:  36%|███▌      | 160/448 [00:19<00:39,  7.38sample/s, avg_s_per_sample=0.112, eta=36s]
+BLoB samp gpqa_main:  43%|████▎     | 192/448 [00:25<00:36,  6.95sample/s, avg_s_per_sample=0.118, eta=34s]
+BLoB samp gpqa_main:  50%|█████     | 224/448 [00:30<00:34,  6.50sample/s, avg_s_per_sample=0.125, eta=32s]
+BLoB samp gpqa_main:  57%|█████▋    | 256/448 [00:36<00:31,  6.07sample/s, avg_s_per_sample=0.132, eta=30s]
+BLoB samp gpqa_main:  64%|██████▍   | 288/448 [00:43<00:28,  5.66sample/s, avg_s_per_sample=0.139, eta=27s]
+BLoB samp gpqa_main:  71%|███████▏  | 320/448 [00:51<00:25,  5.02sample/s, avg_s_per_sample=0.146, eta=23s]
+BLoB samp gpqa_main:  79%|███████▊  | 352/448 [00:58<00:20,  4.70sample/s, avg_s_per_sample=0.153, eta=20s]
+BLoB samp gpqa_main:  86%|████████▌ | 384/448 [01:08<00:14,  4.27sample/s, avg_s_per_sample=0.161, eta=16s]
+BLoB samp gpqa_main:  93%|█████████▎| 416/448 [01:17<00:07,  4.00sample/s, avg_s_per_sample=0.172, eta=11s]
+BLoB samp gpqa_main: 100%|██████████| 448/448 [01:27<00:00,  3.71sample/s, avg_s_per_sample=0.180, eta=6s] 
+                                                                                                          
+[TIME] EVAL blob_sample(N=10) on gpqa_main: 84.11 sec (1.40 min)
+[PEAK] EVAL blob_sample(N=10) on gpqa_main: alloc=15.14 GB  reserved=19.64 GB
+
+[gpqa_main(ood) Results]
+  BLoB mean  : NLL=1.6171  ACC=35.27%  ECE=21.43%  Brier=0.7938 (N=0)
+  BLoB samp  : NLL=1.6174  ACC=35.27%  ECE=21.61%  Brier=0.7930 (N=10)

@@ -1,0 +1,151 @@
+$ /home/tori/miniconda3_new/envs/seq-lora/bin/python map_ensemble_eval.py --task scienceqa_closedchoice_grade2_11 --eval_tasks iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main --seed 0 --map_adapter_dir /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_0/map_step_2000 --map_adapter_dir /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_1/map_step_2000 --map_adapter_dir /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_2/map_step_2000 --map_adapter_dir /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000 --map_adapter_dir /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_4/map_step_2000
+
+Using device: cuda amp_dtype: torch.bfloat16
+[Ensemble] members=5
+
+========================
+ ENSEMBLE MEMBER 1/5 
+========================
+[Load] adapter=/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_0/map_step_2000
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_0/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+`torch_dtype` is deprecated! Use `dtype` instead!
+
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 399/399 [00:00<00:00, 12071.29it/s]
+[Head] trimmed lm_head to 4 choice logits
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+
+=== Loading Dataset for Task: obqa ===
+
+=== Loading Dataset for Task: arc-c ===
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[Member 1] scienceqa_closedchoice_grade2_11(test): time=11.89 sec (0.20 min) alloc=17.73GB reserved=24.76GB
+[Member 1] scienceqa_closedchoice_grade12(ood): time=2.70 sec (0.05 min) alloc=16.56GB reserved=24.76GB
+[Member 1] obqa(ood): time=3.18 sec (0.05 min) alloc=17.12GB reserved=19.32GB
+[Member 1] arc-c(ood): time=8.40 sec (0.14 min) alloc=17.38GB reserved=23.14GB
+[Member 1] mmlu_science_high(ood): time=7.26 sec (0.12 min) alloc=18.47GB reserved=23.14GB
+[Member 1] mmlu_science_college(ood): time=3.99 sec (0.07 min) alloc=16.97GB reserved=22.51GB
+[Member 1] gpqa_main(ood): time=9.11 sec (0.15 min) alloc=20.33GB reserved=26.49GB
+
+========================
+ ENSEMBLE MEMBER 2/5 
+========================
+[Load] adapter=/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_1/map_step_2000
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_1/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 399/399 [00:00<00:00, 6909.58it/s]
+[Head] trimmed lm_head to 4 choice logits
+[Member 2] scienceqa_closedchoice_grade2_11(test): time=10.82 sec (0.18 min) alloc=17.73GB reserved=24.95GB
+[Member 2] scienceqa_closedchoice_grade12(ood): time=2.75 sec (0.05 min) alloc=16.56GB reserved=24.95GB
+[Member 2] obqa(ood): time=3.28 sec (0.05 min) alloc=17.12GB reserved=19.32GB
+[Member 2] arc-c(ood): time=8.90 sec (0.15 min) alloc=17.38GB reserved=23.14GB
+[Member 2] mmlu_science_high(ood): time=7.09 sec (0.12 min) alloc=18.47GB reserved=23.14GB
+[Member 2] mmlu_science_college(ood): time=3.79 sec (0.06 min) alloc=16.97GB reserved=22.51GB
+[Member 2] gpqa_main(ood): time=8.86 sec (0.15 min) alloc=20.33GB reserved=26.49GB
+
+========================
+ ENSEMBLE MEMBER 3/5 
+========================
+[Load] adapter=/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_2/map_step_2000
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_2/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 399/399 [00:00<00:00, 9880.02it/s]
+[Head] trimmed lm_head to 4 choice logits
+[Member 3] scienceqa_closedchoice_grade2_11(test): time=11.40 sec (0.19 min) alloc=17.73GB reserved=24.95GB
+[Member 3] scienceqa_closedchoice_grade12(ood): time=2.70 sec (0.05 min) alloc=16.56GB reserved=24.95GB
+[Member 3] obqa(ood): time=3.20 sec (0.05 min) alloc=17.12GB reserved=19.32GB
+[Member 3] arc-c(ood): time=8.58 sec (0.14 min) alloc=17.38GB reserved=23.14GB
+[Member 3] mmlu_science_high(ood): time=7.49 sec (0.12 min) alloc=18.47GB reserved=23.14GB
+[Member 3] mmlu_science_college(ood): time=4.26 sec (0.07 min) alloc=16.97GB reserved=22.51GB
+[Member 3] gpqa_main(ood): time=9.21 sec (0.15 min) alloc=20.33GB reserved=26.49GB
+
+========================
+ ENSEMBLE MEMBER 4/5 
+========================
+[Load] adapter=/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 399/399 [00:00<00:00, 8285.69it/s]
+[Head] trimmed lm_head to 4 choice logits
+[Member 4] scienceqa_closedchoice_grade2_11(test): time=13.06 sec (0.22 min) alloc=17.73GB reserved=24.95GB
+[Member 4] scienceqa_closedchoice_grade12(ood): time=3.10 sec (0.05 min) alloc=16.56GB reserved=24.95GB
+[Member 4] obqa(ood): time=3.55 sec (0.06 min) alloc=17.12GB reserved=19.32GB
+[Member 4] arc-c(ood): time=8.84 sec (0.15 min) alloc=17.38GB reserved=23.14GB
+[Member 4] mmlu_science_high(ood): time=7.25 sec (0.12 min) alloc=18.47GB reserved=23.14GB
+[Member 4] mmlu_science_college(ood): time=4.11 sec (0.07 min) alloc=16.97GB reserved=22.51GB
+[Member 4] gpqa_main(ood): time=9.84 sec (0.16 min) alloc=20.33GB reserved=26.49GB
+
+========================
+ ENSEMBLE MEMBER 5/5 
+========================
+[Load] adapter=/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_4/map_step_2000
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_4/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 399/399 [00:00<00:00, 7133.69it/s]
+[Head] trimmed lm_head to 4 choice logits
+[Member 5] scienceqa_closedchoice_grade2_11(test): time=10.95 sec (0.18 min) alloc=17.73GB reserved=24.95GB
+[Member 5] scienceqa_closedchoice_grade12(ood): time=2.71 sec (0.05 min) alloc=16.56GB reserved=24.95GB
+[Member 5] obqa(ood): time=3.23 sec (0.05 min) alloc=17.12GB reserved=19.32GB
+[Member 5] arc-c(ood): time=9.07 sec (0.15 min) alloc=17.38GB reserved=23.14GB
+[Member 5] mmlu_science_high(ood): time=7.74 sec (0.13 min) alloc=18.47GB reserved=23.14GB
+[Member 5] mmlu_science_college(ood): time=3.88 sec (0.06 min) alloc=16.97GB reserved=22.51GB
+[Member 5] gpqa_main(ood): time=8.79 sec (0.15 min) alloc=20.33GB reserved=26.49GB
+
+========================
+     ENSEMBLE ONLY      
+========================
+[TIME] INFER Ensemble on scienceqa_closedchoice_grade2_11(test): 58.12 sec (0.97 min)
+[PEAK] INFER Ensemble on scienceqa_closedchoice_grade2_11(test): alloc=17.73 GB  reserved=24.95 GB
+
+[scienceqa_closedchoice_grade2_11(test)][ENSEMBLE]
+  NLL=0.1560  ACC=94.23%  ECE=3.07%  Brier=0.0803  members=5
+[TIME] INFER Ensemble on scienceqa_closedchoice_grade12(ood): 13.97 sec (0.23 min)
+[PEAK] INFER Ensemble on scienceqa_closedchoice_grade12(ood): alloc=16.56 GB  reserved=24.95 GB
+
+[scienceqa_closedchoice_grade12(ood)][ENSEMBLE]
+  NLL=0.3041  ACC=93.23%  ECE=4.73%  Brier=0.1053  members=5
+[TIME] INFER Ensemble on obqa(ood): 16.44 sec (0.27 min)
+[PEAK] INFER Ensemble on obqa(ood): alloc=17.12 GB  reserved=19.32 GB
+
+[obqa(ood)][ENSEMBLE]
+  NLL=0.4769  ACC=87.80%  ECE=7.52%  Brier=0.1854  members=5
+[TIME] INFER Ensemble on arc-c(ood): 43.80 sec (0.73 min)
+[PEAK] INFER Ensemble on arc-c(ood): alloc=17.38 GB  reserved=23.14 GB
+
+[arc-c(ood)][ENSEMBLE]
+  NLL=0.3751  ACC=91.81%  ECE=6.00%  Brier=0.1404  members=5
+[TIME] INFER Ensemble on mmlu_science_high(ood): 36.82 sec (0.61 min)
+[PEAK] INFER Ensemble on mmlu_science_high(ood): alloc=18.47 GB  reserved=23.14 GB
+
+[mmlu_science_high(ood)][ENSEMBLE]
+  NLL=0.7542  ACC=81.02%  ECE=12.28%  Brier=0.2914  members=5
+[TIME] INFER Ensemble on mmlu_science_college(ood): 20.03 sec (0.33 min)
+[PEAK] INFER Ensemble on mmlu_science_college(ood): alloc=16.97 GB  reserved=22.51 GB
+
+[mmlu_science_college(ood)][ENSEMBLE]
+  NLL=1.0187  ACC=74.28%  ECE=13.96%  Brier=0.4041  members=5
+[TIME] INFER Ensemble on gpqa_main(ood): 45.81 sec (0.76 min)
+[PEAK] INFER Ensemble on gpqa_main(ood): alloc=20.33 GB  reserved=26.49 GB
+
+[gpqa_main(ood)][ENSEMBLE]
+  NLL=1.9346  ACC=37.05%  ECE=32.40%  Brier=0.8770  members=5

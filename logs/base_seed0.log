@@ -1,0 +1,57 @@
+Using device: cuda amp_dtype: torch.bfloat16
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+[Head] trimmed lm_head to 4 choice logits
+[TIME] LOAD-STAGE BASE on scienceqa_closedchoice_grade2_11: 11.01 sec (0.18 min)
+[PEAK] LOAD-STAGE BASE on scienceqa_closedchoice_grade2_11: alloc=15.26 GB  reserved=15.40 GB
+
+========================
+       BASE ONLY        
+========================
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[TIME] INFER BASE on scienceqa_closedchoice_grade2_11(test): 11.41 sec (0.19 min)
+[PEAK] INFER BASE on scienceqa_closedchoice_grade2_11(test): alloc=17.72 GB  reserved=24.82 GB
+
+[scienceqa_closedchoice_grade2_11(test)][BASE]
+  NLL=0.4729  ACC=78.43%  ECE=3.93%  Brier=0.2951
+[TIME] INFER BASE on scienceqa_closedchoice_grade12(ood): 2.65 sec (0.04 min)
+[PEAK] INFER BASE on scienceqa_closedchoice_grade12(ood): alloc=16.55 GB  reserved=24.82 GB
+
+[scienceqa_closedchoice_grade12(ood)][BASE]
+  NLL=0.6181  ACC=72.90%  ECE=10.64%  Brier=0.3829
+
+=== Loading Dataset for Task: obqa ===
+[TIME] INFER BASE on obqa(ood): 3.23 sec (0.05 min)
+[PEAK] INFER BASE on obqa(ood): alloc=17.11 GB  reserved=19.21 GB
+
+[obqa(ood)][BASE]
+  NLL=0.6088  ACC=78.40%  ECE=8.31%  Brier=0.3110
+
+=== Loading Dataset for Task: arc-c ===
+[TIME] INFER BASE on arc-c(ood): 8.40 sec (0.14 min)
+[PEAK] INFER BASE on arc-c(ood): alloc=17.37 GB  reserved=22.74 GB
+
+[arc-c(ood)][BASE]
+  NLL=0.3498  ACC=88.65%  ECE=6.17%  Brier=0.1732
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[TIME] INFER BASE on mmlu_science_high(ood): 7.08 sec (0.12 min)
+[PEAK] INFER BASE on mmlu_science_high(ood): alloc=18.46 GB  reserved=22.74 GB
+
+[mmlu_science_high(ood)][BASE]
+  NLL=0.5869  ACC=79.07%  ECE=3.22%  Brier=0.3000
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[TIME] INFER BASE on mmlu_science_college(ood): 3.77 sec (0.06 min)
+[PEAK] INFER BASE on mmlu_science_college(ood): alloc=16.95 GB  reserved=21.87 GB
+
+[mmlu_science_college(ood)][BASE]
+  NLL=0.7695  ACC=68.50%  ECE=6.89%  Brier=0.3996
+[TIME] INFER BASE on gpqa_main(ood): 8.64 sec (0.14 min)
+[PEAK] INFER BASE on gpqa_main(ood): alloc=20.32 GB  reserved=25.20 GB
+
+[gpqa_main(ood)][BASE]
+  NLL=1.6322  ACC=30.80%  ECE=25.13%  Brier=0.8439

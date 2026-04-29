@@ -1,0 +1,50 @@
+Using device: cuda amp_dtype: torch.bfloat16
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = iid_qwen35_8b_obqa_lora_map_leftpad/obqa_qv_lmhead_leftpad/seed_3/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 11063.55it/s]
+[Head] trimmed lm_head to 4 choice logits
+[TIME] LOAD-STAGE MAP on obqa: 5.88 sec (0.10 min)
+[PEAK] LOAD-STAGE MAP on obqa: alloc=15.26 GB  reserved=15.43 GB
+
+========================
+        MAP ONLY        
+========================
+
+=== Loading Dataset for Task: obqa ===
+[TIME] INFER MAP on obqa(test): 3.01 sec (0.05 min)
+[PEAK] INFER MAP on obqa(test): alloc=14.49 GB  reserved=15.43 GB
+
+[obqa(test)][MAP]
+  NLL=0.3787  ACC=92.00%  ECE=6.35%  Brier=0.1401
+
+=== Loading Dataset for Task: arc-e ===
+[TIME] INFER MAP on arc-e(ood): 13.94 sec (0.23 min)
+[PEAK] INFER MAP on arc-e(ood): alloc=14.81 GB  reserved=17.44 GB
+
+[arc-e(ood)][MAP]
+  NLL=0.1495  ACC=96.54%  ECE=2.31%  Brier=0.0601
+
+=== Loading Dataset for Task: arc-c ===
+[TIME] INFER MAP on arc-c(ood): 7.79 sec (0.13 min)
+[PEAK] INFER MAP on arc-c(ood): alloc=14.85 GB  reserved=17.76 GB
+
+[arc-c(ood)][MAP]
+  NLL=0.3448  ACC=92.13%  ECE=6.12%  Brier=0.1367
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[TIME] INFER MAP on mmlu_science_high(ood): 5.93 sec (0.10 min)
+[PEAK] INFER MAP on mmlu_science_high(ood): alloc=15.26 GB  reserved=18.82 GB
+
+[mmlu_science_high(ood)][MAP]
+  NLL=0.7870  ACC=80.57%  ECE=13.03%  Brier=0.3114
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[TIME] INFER MAP on mmlu_science_college(ood): 3.06 sec (0.05 min)
+[PEAK] INFER MAP on mmlu_science_college(ood): alloc=15.00 GB  reserved=18.82 GB
+
+[mmlu_science_college(ood)][MAP]
+  NLL=0.9774  ACC=72.25%  ECE=15.78%  Brier=0.4133

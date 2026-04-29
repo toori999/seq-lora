@@ -1,0 +1,164 @@
+{
+  "eval_tasks": [
+    "iid",
+    "scienceqa_closedchoice_grade12",
+    "obqa",
+    "arc-c",
+    "mmlu_science_high",
+    "mmlu_science_college",
+    "gpqa_main"
+  ],
+  "log_root": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_random_seq_disentangle",
+  "map_random_base_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad",
+  "runs": {
+    "seed_13": {
+      "flow": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_random_seq_disentangle/seed_13/flow",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/seed_13/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_random_seq_disentangle/seed_13/flow.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/seed_13/map_step_2000",
+        "meta": {
+          "effective_bsz": 8,
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "grad_accum": 2,
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/seed_13/map_step_2000",
+          "micro_bsz": 4,
+          "notes": "Slices follow the actual MAP-random sample stream, grouped into contiguous optimizer-step windows.",
+          "num_optimizer_step_blocks": 748,
+          "num_slices": 10,
+          "seed": 13,
+          "slice_block_ranges": [
+            [
+              0,
+              74
+            ],
+            [
+              75,
+              149
+            ],
+            [
+              150,
+              224
+            ],
+            [
+              225,
+              299
+            ],
+            [
+              300,
+              374
+            ],
+            [
+              375,
+              449
+            ],
+            [
+              450,
+              524
+            ],
+            [
+              525,
+              599
+            ],
+            [
+              600,
+              673
+            ],
+            [
+              674,
+              747
+            ]
+          ],
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_random_seq_disentangle/seed_13/flow",
+          "variant": "flow"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_random_seq_disentangle/seed_13/flow"
+      },
+      "semantic": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_random_seq_disentangle/seed_13/semantic",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/seed_13/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_random_seq_disentangle/seed_13/semantic.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/seed_13/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/seed_13/map_step_2000",
+          "notes": "Grade-ordered slices (easy-to-hard / low-to-high grade).",
+          "seed": 13,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_random_seq_disentangle/seed_13/semantic",
+          "slice_grade_order": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "variant": "semantic"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_random_seq_disentangle/seed_13/semantic"
+      }
+    }
+  },
+  "seeds": [
+    13
+  ],
+  "slice_root": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_random_seq_disentangle",
+  "variants": [
+    "flow",
+    "semantic"
+  ]
+}

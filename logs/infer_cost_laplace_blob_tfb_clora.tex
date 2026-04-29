@@ -1,0 +1,79 @@
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4.0pt}
+\renewcommand{\arraystretch}{1.08}
+\caption{
+Inference cost across evaluation tasks.
+Time is averaged over 5 seeds (1, 3, 7, 11, 13) in seconds, while peak allocated and reserved GPU memory are reported in GB.
+Best values in each column block are shown in \textbf{bold}.
+}
+\label{tab:infer_cost_laplace_blob_tfb_clora}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc ccc ccc ccc}
+\toprule
+& \multicolumn{3}{c}{\textbf{BLoB}}
+& \multicolumn{3}{c}{\textbf{TFB}}
+& \multicolumn{3}{c}{\textbf{Laplace}}
+& \multicolumn{3}{c}{\textbf{C-LoRA}} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13}
+\textbf{Task}
+& \textbf{Time} & \textbf{Alloc.} & \textbf{Res.}
+& \textbf{Time} & \textbf{Alloc.} & \textbf{Res.}
+& \textbf{Time} & \textbf{Alloc.} & \textbf{Res.}
+& \textbf{Time} & \textbf{Alloc.} & \textbf{Res.} \\
+\midrule
+IID
+& \textbf{319.85} & 14.99 & 17.87
+& 357.00 & \textbf{14.95} & 17.80
+& 445.20 & 48.16 & 94.13
+& 390.83 & 15.23 & \textbf{17.20} \\
+
+Grade12
+& \textbf{54.44} & 14.67 & \textbf{15.90}
+& 71.97 & \textbf{14.63} & 17.80
+& 70.32 & 41.80 & 82.50
+& 74.06 & 14.80 & 15.91 \\
+
+OBQA
+& 77.45 & 14.51 & \textbf{15.48}
+& \textbf{76.38} & \textbf{14.48} & 15.84
+& 110.19 & 37.37 & 82.50
+& 88.30 & 14.58 & 15.51 \\
+
+ARC-C
+& \textbf{198.04} & 14.82 & 17.82
+& 261.27 & \textbf{14.78} & \textbf{17.76}
+& 257.48 & 50.73 & 94.25
+& 267.98 & 14.99 & 17.90 \\
+
+MMLU-High
+& \textbf{144.13} & 15.25 & 19.15
+& 194.98 & \textbf{15.22} & 19.08
+& 148.54 & 52.99 & 94.16
+& 190.65 & 15.55 & \textbf{19.06} \\
+
+MMLU-College
+& \textbf{74.52} & 15.01 & 17.07
+& 100.01 & \textbf{14.97} & 19.08
+& 77.89 & 49.62 & 94.22
+& 99.40 & 15.24 & \textbf{16.92} \\
+
+GPQA
+& 197.90 & 15.62 & 20.01
+& 266.45 & \textbf{15.58} & 19.94
+& \textbf{103.64} & 67.47 & 94.24
+& 243.85 & 16.01 & \textbf{19.92} \\
+\bottomrule
+\end{tabular}%
+}
+
+\vspace{2mm}
+{\scriptsize
+\textit{Evaluation settings.}
+BLoB: sample prediction, MC=32, eval batch size=48 \quad
+TFB-LoRA: MC=32, eval batch size=48 \quad
+Laplace: MC=100000, chunk size=512, eval batch size=32 \quad
+C-LoRA: sample prediction, MC=32, eval batch size=48.
+}
+\end{table*}

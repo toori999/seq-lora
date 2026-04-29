@@ -1,0 +1,622 @@
+{
+  "eval_tasks": [
+    "iid",
+    "scienceqa_closedchoice_grade12",
+    "obqa",
+    "arc-c",
+    "mmlu_science_high",
+    "mmlu_science_college",
+    "gpqa_main"
+  ],
+  "log_root": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls",
+  "map_base_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad",
+  "runs": {
+    "seed_1": {
+      "random_partition": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_1/random_partition",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_1/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_1/random_partition.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_1/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_1/map_step_2000",
+          "notes": "Whole training set shuffled, then repartitioned into random equal-size slices.",
+          "num_slices": 10,
+          "seed": 1,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_1/random_partition",
+          "slice_sizes": [
+            600,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599
+          ],
+          "variant": "random_partition"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_1/random_partition"
+      },
+      "semantic_random": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_1/semantic_random",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_1/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_1/semantic_random.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_1/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_1/map_step_2000",
+          "notes": "Grade bucket composition preserved, but slice order randomized.",
+          "seed": 1,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_1/semantic_random",
+          "slice_grade_order": [
+            10,
+            6,
+            9,
+            2,
+            3,
+            4,
+            7,
+            11,
+            8,
+            5
+          ],
+          "slice_permutation": [
+            8,
+            4,
+            7,
+            0,
+            1,
+            2,
+            5,
+            9,
+            6,
+            3
+          ],
+          "variant": "semantic_random"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_1/semantic_random"
+      }
+    },
+    "seed_11": {
+      "random_partition": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_11/random_partition",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_11/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_11/random_partition.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_11/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_11/map_step_2000",
+          "notes": "Whole training set shuffled, then repartitioned into random equal-size slices.",
+          "num_slices": 10,
+          "seed": 11,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_11/random_partition",
+          "slice_sizes": [
+            600,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599
+          ],
+          "variant": "random_partition"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_11/random_partition"
+      },
+      "semantic_random": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_11/semantic_random",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_11/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_11/semantic_random.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_11/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_11/map_step_2000",
+          "notes": "Grade bucket composition preserved, but slice order randomized.",
+          "seed": 11,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_11/semantic_random",
+          "slice_grade_order": [
+            10,
+            7,
+            8,
+            3,
+            11,
+            5,
+            6,
+            4,
+            9,
+            2
+          ],
+          "slice_permutation": [
+            8,
+            5,
+            6,
+            1,
+            9,
+            3,
+            4,
+            2,
+            7,
+            0
+          ],
+          "variant": "semantic_random"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_11/semantic_random"
+      }
+    },
+    "seed_13": {
+      "random_partition": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_13/random_partition",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_13/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_13/random_partition.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_13/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_13/map_step_2000",
+          "notes": "Whole training set shuffled, then repartitioned into random equal-size slices.",
+          "num_slices": 10,
+          "seed": 13,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_13/random_partition",
+          "slice_sizes": [
+            600,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599
+          ],
+          "variant": "random_partition"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_13/random_partition"
+      },
+      "semantic_random": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_13/semantic_random",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_13/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_13/semantic_random.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_13/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_13/map_step_2000",
+          "notes": "Grade bucket composition preserved, but slice order randomized.",
+          "seed": 13,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_13/semantic_random",
+          "slice_grade_order": [
+            8,
+            3,
+            7,
+            2,
+            6,
+            9,
+            4,
+            10,
+            5,
+            11
+          ],
+          "slice_permutation": [
+            6,
+            1,
+            5,
+            0,
+            4,
+            7,
+            2,
+            8,
+            3,
+            9
+          ],
+          "variant": "semantic_random"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_13/semantic_random"
+      }
+    },
+    "seed_3": {
+      "random_partition": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_3/random_partition",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_3/random_partition.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000",
+          "notes": "Whole training set shuffled, then repartitioned into random equal-size slices.",
+          "num_slices": 10,
+          "seed": 3,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_3/random_partition",
+          "slice_sizes": [
+            600,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599
+          ],
+          "variant": "random_partition"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_3/random_partition"
+      },
+      "semantic_random": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_3/semantic_random",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_3/semantic_random.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_3/map_step_2000",
+          "notes": "Grade bucket composition preserved, but slice order randomized.",
+          "seed": 3,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_3/semantic_random",
+          "slice_grade_order": [
+            11,
+            8,
+            2,
+            4,
+            3,
+            6,
+            9,
+            7,
+            5,
+            10
+          ],
+          "slice_permutation": [
+            9,
+            6,
+            0,
+            2,
+            1,
+            4,
+            7,
+            5,
+            3,
+            8
+          ],
+          "variant": "semantic_random"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_3/semantic_random"
+      }
+    },
+    "seed_7": {
+      "random_partition": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_7/random_partition",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_7/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_7/random_partition.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_7/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_7/map_step_2000",
+          "notes": "Whole training set shuffled, then repartitioned into random equal-size slices.",
+          "num_slices": 10,
+          "seed": 7,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_7/random_partition",
+          "slice_sizes": [
+            600,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599,
+            599
+          ],
+          "variant": "random_partition"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_7/random_partition"
+      },
+      "semantic_random": {
+        "command": [
+          "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/seq_eval_iid_constantq.py",
+          "--task",
+          "scienceqa_closedchoice_grade2_11",
+          "--slices_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_7/semantic_random",
+          "--map_dir",
+          "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_7/map_step_2000",
+          "--eval_tasks",
+          "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+          "--q_mode",
+          "module_constant",
+          "--s_q",
+          "1.0",
+          "--forecast_horizon",
+          "0"
+        ],
+        "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/logs/map_order_seq_controls/seed_7/semantic_random.log",
+        "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_7/map_step_2000",
+        "meta": {
+          "eval_tasks": [
+            "iid",
+            "scienceqa_closedchoice_grade12",
+            "obqa",
+            "arc-c",
+            "mmlu_science_high",
+            "mmlu_science_college",
+            "gpqa_main"
+          ],
+          "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_7/map_step_2000",
+          "notes": "Grade bucket composition preserved, but slice order randomized.",
+          "seed": 7,
+          "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_7/semantic_random",
+          "slice_grade_order": [
+            10,
+            2,
+            9,
+            3,
+            5,
+            8,
+            4,
+            6,
+            7,
+            11
+          ],
+          "slice_permutation": [
+            8,
+            0,
+            7,
+            1,
+            3,
+            6,
+            2,
+            4,
+            5,
+            9
+          ],
+          "variant": "semantic_random"
+        },
+        "returncode": 0,
+        "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls/seed_7/semantic_random"
+      }
+    }
+  },
+  "seeds": [
+    1,
+    3,
+    7,
+    11,
+    13
+  ],
+  "slice_root": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/map_order_seq_controls",
+  "variants": [
+    "semantic_random",
+    "random_partition"
+  ]
+}

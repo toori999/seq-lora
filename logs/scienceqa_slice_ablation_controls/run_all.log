@@ -1,0 +1,23 @@
+[Config] root=/home/tori/projects/Seq-LoRA/Seq_LoRA
+[Config] seeds=1 3 7 11 13
+[Config] variants=reverse_grade shuffled_grade full_shuffle base_nll_easyhard
+[Config] slice_root=slice_data/scienceqa_slice_ablation_controls
+[Config] log_root=logs/scienceqa_slice_ablation_controls
+[Build] reverse_grade / shuffled_grade / full_shuffle
+[Load] ScienceQA train rows=5991
+[Skip] slice_data/scienceqa_slice_ablation_controls/reverse_grade/seed_1/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/shuffled_grade/seed_1/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/full_shuffle/seed_1/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/reverse_grade/seed_3/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/shuffled_grade/seed_3/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/full_shuffle/seed_3/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/reverse_grade/seed_7/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/shuffled_grade/seed_7/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/full_shuffle/seed_7/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/reverse_grade/seed_11/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/shuffled_grade/seed_11/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/full_shuffle/seed_11/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/reverse_grade/seed_13/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/shuffled_grade/seed_13/kfac_balanced
+[Skip] slice_data/scienceqa_slice_ablation_controls/full_shuffle/seed_13/kfac_balanced
+[Build] base_nll_easyhard

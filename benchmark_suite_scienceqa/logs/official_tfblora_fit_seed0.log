@@ -1,0 +1,159 @@
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Fri Apr 10 14:22:29 2026).
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Fri Apr 10 14:22:29 2026).
+
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+=====================================
+Loaded benchmark_mcdataset source=scienceqa_closedchoice_grade2_11 eval=iid
+=====================================
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[benchmark_mcdataset] train=5991 anchor=500(train) test=2063(scienceqa_closedchoice_grade2_11:test)
+Namespace(seed=0, evaluate=True, checkpoint=False, checkpoint_name='default', nowand=True, wandb_entity='<your_wandb_account>', wandb_project='Bayes LoRA', wandb_name='', dataset='scienceqa_closedchoice_grade2_11', dataset_type='benchmark_mcdataset', max_seq_len=300, modelwrapper='tfblora', model='Qwen/Qwen3-8B-Base', model_type='causallm', load_in_8bit=True, loss='nll', n_epochs=0, max_train_steps=10000, eval_per_steps=6000, early_stop_steps=0, batch_size=32, lr=0.0001, opt='adamw', opt_wd=0.0, warmup_ratio=0.06, adam_epsilon=1e-06, use_slow_tokenizer=False, add_space=False, is_s2s=False, pad_to_max_length=False, eval_steps=0, num_bins=15, load_model_path=None, load_lora_path='iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_0/map_step_2000', load_lora_huggingface_repo=None, log_path='official_tfblora_fit_seed0', testing_set='train_train_test', ood_ori_dataset=None, eval_dataset='iid', anchor_size=500, lora_r=8, lora_alpha=16, lora_dropout=0.05, apply_classhead_lora=True, apply_qkv_head_lora=False, bayes_train_n_samples=10, bayes_eval_n_samples=10, bayes_eval_n_samples_final=10, bayes_eps=0.05, bayes_gamma=8, bayes_kllr=0.02, bayes_beta=0.015, bayes_final_beta=0.18, bayes_flipout=True, bayes_inference_notsample=False, bayes_klreweighting=True, th=0.003, iter=5, conf_jobnum='f121d19e-2e71-46e9-9061-d94dbb53e93b', conf_timestamp='2026-04-10 15:09:10.541544', conf_host='tori', outdim=4, num_samples=5991)
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights:   0%|          | 1/399 [00:00<02:13,  2.98it/s]Loading weights:   1%|          | 2/399 [00:00<01:59,  3.31it/s]Loading weights:   1%|          | 4/399 [00:00<01:14,  5.28it/s]Loading weights:   1%|▏         | 5/399 [00:01<01:11,  5.51it/s]Loading weights:   2%|▏         | 6/399 [00:01<01:16,  5.15it/s]Loading weights:   2%|▏         | 9/399 [00:01<00:45,  8.66it/s]Loading weights:   3%|▎         | 10/399 [00:01<00:46,  8.29it/s]Loading weights:   3%|▎         | 13/399 [00:01<00:36, 10.72it/s]Loading weights:   4%|▍         | 15/399 [00:01<00:37, 10.31it/s]Loading weights:   4%|▍         | 17/399 [00:02<00:43,  8.87it/s]Loading weights:   5%|▌         | 21/399 [00:02<00:31, 12.16it/s]Loading weights:   6%|▌         | 23/399 [00:02<00:29, 12.73it/s]Loading weights:   6%|▋         | 25/399 [00:02<00:28, 13.26it/s]Loading weights:   7%|▋         | 27/399 [00:03<00:38,  9.66it/s]Loading weights:   7%|▋         | 29/399 [00:03<00:36, 10.11it/s]Loading weights:   8%|▊         | 31/399 [00:03<00:31, 11.73it/s]Loading weights:   8%|▊         | 33/399 [00:03<00:32, 11.15it/s]Loading weights:   9%|▉         | 35/399 [00:03<00:38,  9.49it/s]Loading weights:   9%|▉         | 37/399 [00:03<00:35, 10.18it/s]Loading weights:  10%|▉         | 39/399 [00:04<00:44,  8.02it/s]Loading weights:  11%|█         | 42/399 [00:04<00:31, 11.19it/s]Loading weights:  11%|█         | 44/399 [00:04<00:29, 12.07it/s]Loading weights:  12%|█▏        | 46/399 [00:04<00:26, 13.19it/s]Loading weights:  12%|█▏        | 49/399 [00:04<00:21, 16.33it/s]Loading weights:  14%|█▍        | 56/399 [00:04<00:12, 27.95it/s]Loading weights:  15%|█▌        | 60/399 [00:05<00:11, 29.52it/s]Loading weights:  16%|█▋        | 65/399 [00:05<00:09, 34.42it/s]Loading weights:  18%|█▊        | 71/399 [00:05<00:08, 36.91it/s]Loading weights:  20%|█▉        | 78/399 [00:05<00:07, 43.86it/s]Loading weights:  21%|██        | 83/399 [00:05<00:08, 37.28it/s]Loading weights:  23%|██▎       | 92/399 [00:05<00:06, 47.43it/s]Loading weights:  25%|██▍       | 98/399 [00:05<00:06, 45.39it/s]Loading weights:  26%|██▌       | 104/399 [00:05<00:06, 44.36it/s]Loading weights:  28%|██▊       | 111/399 [00:06<00:05, 49.16it/s]Loading weights:  29%|██▉       | 117/399 [00:06<00:06, 42.33it/s]Loading weights:  31%|███▏      | 125/399 [00:06<00:05, 47.32it/s]Loading weights:  33%|███▎      | 130/399 [00:06<00:05, 45.65it/s]Loading weights:  34%|███▍      | 136/399 [00:06<00:05, 48.60it/s]Loading weights:  36%|███▌      | 142/399 [00:06<00:05, 47.19it/s]Loading weights:  37%|███▋      | 148/399 [00:06<00:05, 44.86it/s]Loading weights:  39%|███▉      | 155/399 [00:07<00:04, 50.03it/s]Loading weights:  40%|████      | 161/399 [00:07<00:05, 41.85it/s]Loading weights:  42%|████▏     | 169/399 [00:07<00:04, 49.14it/s]Loading weights:  44%|████▍     | 175/399 [00:07<00:04, 47.30it/s]Loading weights:  45%|████▌     | 181/399 [00:07<00:04, 45.51it/s]Loading weights:  47%|████▋     | 188/399 [00:07<00:04, 50.27it/s]Loading weights:  49%|████▊     | 194/399 [00:07<00:04, 44.60it/s]Loading weights:  51%|█████     | 202/399 [00:08<00:03, 51.60it/s]Loading weights:  52%|█████▏    | 208/399 [00:08<00:03, 48.09it/s]Loading weights:  54%|█████▎    | 214/399 [00:08<00:04, 44.66it/s]Loading weights:  55%|█████▍    | 219/399 [00:08<00:03, 45.59it/s]Loading weights:  56%|█████▋    | 225/399 [00:08<00:03, 44.63it/s]Loading weights:  58%|█████▊    | 232/399 [00:08<00:03, 49.35it/s]Loading weights:  60%|█████▉    | 238/399 [00:08<00:03, 43.08it/s]Loading weights:  62%|██████▏   | 246/399 [00:09<00:03, 49.35it/s]Loading weights:  63%|██████▎   | 252/399 [00:09<00:03, 44.43it/s]Loading weights:  65%|██████▍   | 258/399 [00:09<00:03, 43.73it/s]Loading weights:  66%|██████▋   | 265/399 [00:09<00:02, 49.28it/s]Loading weights:  68%|██████▊   | 271/399 [00:09<00:02, 44.05it/s]Loading weights:  70%|██████▉   | 279/399 [00:09<00:02, 51.29it/s]Loading weights:  71%|███████▏  | 285/399 [00:09<00:02, 48.51it/s]Loading weights:  73%|███████▎  | 291/399 [00:09<00:02, 46.79it/s]Loading weights:  75%|███████▍  | 298/399 [00:10<00:01, 51.45it/s]Loading weights:  76%|███████▌  | 304/399 [00:10<00:02, 44.94it/s]Loading weights:  78%|███████▊  | 312/399 [00:10<00:01, 52.29it/s]Loading weights:  80%|███████▉  | 318/399 [00:10<00:01, 49.73it/s]Loading weights:  81%|████████  | 324/399 [00:10<00:01, 47.44it/s]Loading weights:  83%|████████▎ | 331/399 [00:10<00:01, 52.52it/s]Loading weights:  84%|████████▍ | 337/399 [00:10<00:01, 45.69it/s]Loading weights:  86%|████████▋ | 345/399 [00:11<00:01, 52.39it/s]Loading weights:  88%|████████▊ | 351/399 [00:11<00:01, 47.81it/s]Loading weights:  89%|████████▉ | 357/399 [00:11<00:00, 45.27it/s]Loading weights:  91%|█████████ | 364/399 [00:11<00:00, 49.90it/s]Loading weights:  93%|█████████▎| 370/399 [00:11<00:00, 43.17it/s]Loading weights:  95%|█████████▍| 378/399 [00:11<00:00, 50.29it/s]Loading weights:  96%|█████████▌| 384/399 [00:11<00:00, 47.61it/s]Loading weights:  98%|█████████▊| 390/399 [00:12<00:00, 46.66it/s]Loading weights:  99%|█████████▉| 397/399 [00:12<00:00, 51.12it/s]Loading weights: 100%|██████████| 399/399 [00:12<00:00, 32.85it/s]
+[Head] trimmed lm_head to 4 choice logits
+LoRA Model loaded successfully from local path: iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_0/map_step_2000
+=====================
+trainable params: 6,225,936 || all params: 7,574,647,824 || trainable%: 0.0822
+len(train_loader): 188
+num of epochs: 54
+[TIME] LOAD-STAGE TFBLORA on scienceqa_closedchoice_grade2_11: 15.38 sec (0.26 min)
+[PEAK] LOAD-STAGE TFBLORA on scienceqa_closedchoice_grade2_11: alloc=14.68 GB  reserved=14.76 GB
+[TFB-FIT] starting anchor sweep: beta_upper=0.015000
+/home/tori/miniconda3_new/envs/seq-lora/lib/python3.12/site-packages/bitsandbytes/autograd/_functions.py:123: UserWarning: MatMul8bitLt: inputs will be cast from torch.bfloat16 to float16 during quantization
+  warnings.warn(f"MatMul8bitLt: inputs will be cast from {A.dtype} to float16 during quantization")
+[PROGRESS] TFB anchor sweep: 1/16 (6.2%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 2/16 (12.5%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 3/16 (18.8%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 4/16 (25.0%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 5/16 (31.2%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 6/16 (37.5%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 7/16 (43.8%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 8/16 (50.0%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 9/16 (56.2%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 10/16 (62.5%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 11/16 (68.8%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 12/16 (75.0%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 13/16 (81.2%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 14/16 (87.5%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 15/16 (93.8%)  beta=0.000000
+[PROGRESS] TFB anchor sweep: 16/16 (100.0%)  beta=0.000000
+[TFB-FIT] binary-search iter 1/5: beta=0.008000 range=(0.001000, 0.015000)
+[PROGRESS] TFB fit iter 1/5: 1/16 (6.2%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 2/16 (12.5%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 3/16 (18.8%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 4/16 (25.0%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 5/16 (31.2%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 6/16 (37.5%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 7/16 (43.8%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 8/16 (50.0%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 9/16 (56.2%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 10/16 (62.5%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 11/16 (68.8%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 12/16 (75.0%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 13/16 (81.2%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 14/16 (87.5%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 15/16 (93.8%)  beta=0.008000
+[PROGRESS] TFB fit iter 1/5: 16/16 (100.0%)  beta=0.008000
+[TFB-FIT] NLL Loss change ratio: 3.348717948717949%
+=====================
+[TFB-FIT] binary-search iter 2/5: beta=0.004500 range=(0.001000, 0.008000)
+[PROGRESS] TFB fit iter 2/5: 1/16 (6.2%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 2/16 (12.5%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 3/16 (18.8%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 4/16 (25.0%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 5/16 (31.2%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 6/16 (37.5%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 7/16 (43.8%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 8/16 (50.0%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 9/16 (56.2%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 10/16 (62.5%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 11/16 (68.8%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 12/16 (75.0%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 13/16 (81.2%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 14/16 (87.5%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 15/16 (93.8%)  beta=0.004500
+[PROGRESS] TFB fit iter 2/5: 16/16 (100.0%)  beta=0.004500
+[TFB-FIT] NLL Loss change ratio: 0.9076923076923076%
+=====================
+[TFB-FIT] binary-search iter 3/5: beta=0.002750 range=(0.001000, 0.004500)
+[PROGRESS] TFB fit iter 3/5: 1/16 (6.2%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 2/16 (12.5%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 3/16 (18.8%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 4/16 (25.0%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 5/16 (31.2%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 6/16 (37.5%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 7/16 (43.8%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 8/16 (50.0%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 9/16 (56.2%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 10/16 (62.5%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 11/16 (68.8%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 12/16 (75.0%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 13/16 (81.2%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 14/16 (87.5%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 15/16 (93.8%)  beta=0.002750
+[PROGRESS] TFB fit iter 3/5: 16/16 (100.0%)  beta=0.002750
+[TFB-FIT] NLL Loss change ratio: 0.29230769230769227%
+=====================
+[TFB-FIT] binary-search iter 4/5: beta=0.003625 range=(0.002750, 0.004500)
+[PROGRESS] TFB fit iter 4/5: 1/16 (6.2%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 2/16 (12.5%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 3/16 (18.8%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 4/16 (25.0%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 5/16 (31.2%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 6/16 (37.5%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 7/16 (43.8%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 8/16 (50.0%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 9/16 (56.2%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 10/16 (62.5%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 11/16 (68.8%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 12/16 (75.0%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 13/16 (81.2%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 14/16 (87.5%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 15/16 (93.8%)  beta=0.003625
+[PROGRESS] TFB fit iter 4/5: 16/16 (100.0%)  beta=0.003625
+[TFB-FIT] NLL Loss change ratio: 0.4615384615384615%
+=====================
+[TFB-FIT] binary-search iter 5/5: beta=0.003188 range=(0.002750, 0.003625)
+[PROGRESS] TFB fit iter 5/5: 1/16 (6.2%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 2/16 (12.5%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 3/16 (18.8%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 4/16 (25.0%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 5/16 (31.2%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 6/16 (37.5%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 7/16 (43.8%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 8/16 (50.0%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 9/16 (56.2%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 10/16 (62.5%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 11/16 (68.8%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 12/16 (75.0%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 13/16 (81.2%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 14/16 (87.5%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 15/16 (93.8%)  beta=0.003188
+[PROGRESS] TFB fit iter 5/5: 16/16 (100.0%)  beta=0.003188
+[TFB-FIT] NLL Loss change ratio: 0.4230769230769231%
+=====================
+[TFB-FIT] Optimal bayes_beta: 0.0031875000000000002
+[Save] TFB fit info -> checkpoints/tfblora/Qwen/Qwen3-8B-Base/scienceqa_closedchoice_grade2_11/official_tfblora_fit_seed0/tfb_fit.json
+[TIME] FIT TFB on scienceqa_closedchoice_grade2_11(train): 318.28 sec (5.30 min)
+[PEAK] FIT TFB on scienceqa_closedchoice_grade2_11(train): alloc=9.86 GB  reserved=14.76 GB
+[PROGRESS] TFB eval: 1/65 (1.5%)  mc=10
+[PROGRESS] TFB eval: 6/65 (9.2%)  mc=10
+[PROGRESS] TFB eval: 12/65 (18.5%)  mc=10
+[PROGRESS] TFB eval: 18/65 (27.7%)  mc=10
+[PROGRESS] TFB eval: 24/65 (36.9%)  mc=10
+[PROGRESS] TFB eval: 30/65 (46.2%)  mc=10
+[PROGRESS] TFB eval: 36/65 (55.4%)  mc=10
+[PROGRESS] TFB eval: 42/65 (64.6%)  mc=10
+[PROGRESS] TFB eval: 48/65 (73.8%)  mc=10
+[PROGRESS] TFB eval: 54/65 (83.1%)  mc=10
+[PROGRESS] TFB eval: 60/65 (92.3%)  mc=10
+[PROGRESS] TFB eval: 65/65 (100.0%)  mc=10
+[TIME] INFER TFB on scienceqa_closedchoice_grade2_11(test): 268.70 sec (4.48 min)
+[PEAK] INFER TFB on scienceqa_closedchoice_grade2_11(test): alloc=10.00 GB  reserved=12.04 GB
+
+[scienceqa_closedchoice_grade2_11(test)][TFB]
+  NLL=0.1543  ACC=93.80%  ECE=1.83%  Brier=0.0845  mc=10  beta=0.003188  std=0.041260  flip_ratio=0.020359

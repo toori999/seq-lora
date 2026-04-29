@@ -1,0 +1,84 @@
+$ /home/tori/miniconda3_new/envs/seq-lora/bin/python map_eval.py --task scienceqa_closedchoice_grade2_11 --map_adapter_dir iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_17/map_step_2000 --eval_tasks iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main --seed 17
+
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using device: cuda amp_dtype: torch.bfloat16
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_17/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 6589.60it/s]
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Sat Apr 11 19:35:13 2026).
+Using the latest cached version of the dataset since tcallens/scienceqa-text-only couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/tori/.cache/huggingface/datasets/tcallens___scienceqa-text-only/default/0.0.0/d6a48626966cf14fd3870825e8f57b11f9b3cb71 (last modified on Sat Apr 11 19:35:13 2026).
+Using the latest cached version of the dataset since openbookqa couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'main' at /home/tori/.cache/huggingface/datasets/openbookqa/main/0.0.0/388097ea7776314e93a529163e0fea805b8a6454 (last modified on Fri Apr 10 13:07:14 2026).
+Using the latest cached version of the dataset since ai2_arc couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'ARC-Challenge' at /home/tori/.cache/huggingface/datasets/ai2_arc/ARC-Challenge/0.0.0/210d026faf9955653af8916fad021475a3f00453 (last modified on Fri Apr  3 12:59:36 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'high_school_physics' at /home/tori/.cache/huggingface/datasets/cais___mmlu/high_school_physics/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr 11 19:35:06 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'high_school_chemistry' at /home/tori/.cache/huggingface/datasets/cais___mmlu/high_school_chemistry/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:14 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'high_school_biology' at /home/tori/.cache/huggingface/datasets/cais___mmlu/high_school_biology/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:16 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'college_physics' at /home/tori/.cache/huggingface/datasets/cais___mmlu/college_physics/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Tue Apr  7 17:20:42 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'college_chemistry' at /home/tori/.cache/huggingface/datasets/cais___mmlu/college_chemistry/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:20 2026).
+Using the latest cached version of the dataset since cais/mmlu couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'college_biology' at /home/tori/.cache/huggingface/datasets/cais___mmlu/college_biology/0.0.0/c30699e8356da336a370243923dbaf21066bb9fe (last modified on Sat Apr  4 19:06:22 2026).
+Using the latest cached version of the dataset since Idavidrein/gpqa couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'gpqa_main' at /home/tori/.cache/huggingface/datasets/Idavidrein___gpqa/gpqa_main/0.0.0/633f5ee89ab8ad4522a9f850766b73f62147ffdd (last modified on Wed Apr  8 09:54:32 2026).
+[Head] trimmed lm_head to 4 choice logits
+[TIME] LOAD-STAGE MAP on scienceqa_closedchoice_grade2_11: 6.14 sec (0.10 min)
+[PEAK] LOAD-STAGE MAP on scienceqa_closedchoice_grade2_11: alloc=15.26 GB  reserved=15.43 GB
+
+========================
+        MAP ONLY        
+========================
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[TIME] INFER MAP on scienceqa_closedchoice_grade2_11(test): 11.30 sec (0.19 min)
+[PEAK] INFER MAP on scienceqa_closedchoice_grade2_11(test): alloc=17.74 GB  reserved=24.76 GB
+
+[scienceqa_closedchoice_grade2_11(test)][MAP]
+  NLL=0.1902  ACC=93.99%  ECE=3.81%  Brier=0.0893
+[TIME] INFER MAP on scienceqa_closedchoice_grade12(ood): 2.69 sec (0.04 min)
+[PEAK] INFER MAP on scienceqa_closedchoice_grade12(ood): alloc=16.56 GB  reserved=24.76 GB
+
+[scienceqa_closedchoice_grade12(ood)][MAP]
+  NLL=0.4395  ACC=90.97%  ECE=7.65%  Brier=0.1567
+
+=== Loading Dataset for Task: obqa ===
+[TIME] INFER MAP on obqa(ood): 3.20 sec (0.05 min)
+[PEAK] INFER MAP on obqa(ood): alloc=17.12 GB  reserved=19.32 GB
+
+[obqa(ood)][MAP]
+  NLL=0.5750  ACC=87.20%  ECE=9.56%  Brier=0.2093
+
+=== Loading Dataset for Task: arc-c ===
+[TIME] INFER MAP on arc-c(ood): 8.49 sec (0.14 min)
+[PEAK] INFER MAP on arc-c(ood): alloc=17.39 GB  reserved=23.14 GB
+
+[arc-c(ood)][MAP]
+  NLL=0.4368  ACC=91.72%  ECE=6.87%  Brier=0.1532
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[TIME] INFER MAP on mmlu_science_high(ood): 7.16 sec (0.12 min)
+[PEAK] INFER MAP on mmlu_science_high(ood): alloc=18.47 GB  reserved=23.14 GB
+
+[mmlu_science_high(ood)][MAP]
+  NLL=0.8296  ACC=82.23%  ECE=12.94%  Brier=0.3026
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[TIME] INFER MAP on mmlu_science_college(ood): 3.83 sec (0.06 min)
+[PEAK] INFER MAP on mmlu_science_college(ood): alloc=16.97 GB  reserved=22.51 GB
+
+[mmlu_science_college(ood)][MAP]
+  NLL=1.0554  ACC=73.99%  ECE=15.13%  Brier=0.4149
+[TIME] INFER MAP on gpqa_main(ood): 8.68 sec (0.14 min)
+[PEAK] INFER MAP on gpqa_main(ood): alloc=20.33 GB  reserved=26.49 GB
+
+[gpqa_main(ood)][MAP]
+  NLL=1.9992  ACC=36.16%  ECE=33.80%  Brier=0.9018

@@ -1,0 +1,90 @@
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3.6pt}
+\renewcommand{\arraystretch}{1.08}
+\caption{
+Inference cost across evaluation tasks.
+Time and peak GPU memory are averaged over 5 seeds (1, 3, 7, 11, 13).
+Peak allocated and reserved memory are reported in GB.
+Best values in each task-wise metric column are shown in \textbf{bold}.
+}
+\label{tab:infer_cost_laplace_blob_tfb_clora_seq}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc ccc ccc ccc ccc}
+\toprule
+& \multicolumn{3}{c}{\textbf{Laplace}}
+& \multicolumn{3}{c}{\textbf{BLoB}}
+& \multicolumn{3}{c}{\textbf{TFB}}
+& \multicolumn{3}{c}{\textbf{C-LoRA}}
+& \multicolumn{3}{c}{\textbf{Seq-LoRA}} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13} \cmidrule(lr){14-16}
+\textbf{Task}
+& \textbf{Time} & \textbf{Alloc.} & \textbf{Res.}
+& \textbf{Time} & \textbf{Alloc.} & \textbf{Res.}
+& \textbf{Time} & \textbf{Alloc.} & \textbf{Res.}
+& \textbf{Time} & \textbf{Alloc.} & \textbf{Res.}
+& \textbf{Time} & \textbf{Alloc.} & \textbf{Res.} \\
+\midrule
+IID
+& 445.20 & 48.16 & 94.13
+& 319.85 & 14.99 & 17.87
+& 357.00 & \textbf{14.95} & 17.80
+& 390.83 & 15.23 & \textbf{17.20}
+& \textbf{316.85} & 15.51 & 22.28 \\
+
+Grade12
+& 70.32 & 41.80 & 82.50
+& \textbf{54.44} & 14.67 & \textbf{15.90}
+& 71.97 & \textbf{14.63} & 17.80
+& 74.06 & 14.80 & 15.91
+& 65.82 & 15.20 & 22.28 \\
+
+OBQA
+& 110.19 & 37.37 & 82.50
+& 77.45 & 14.51 & \textbf{15.48}
+& 76.38 & \textbf{14.48} & 15.84
+& 88.30 & 14.58 & 15.51
+& \textbf{68.81} & 15.04 & 16.94 \\
+
+ARC-C
+& 257.48 & 50.73 & 94.25
+& \textbf{198.04} & 14.82 & 17.82
+& 261.27 & \textbf{14.78} & \textbf{17.76}
+& 267.98 & 14.99 & 17.90
+& 233.40 & 15.35 & 21.07 \\
+
+MMLU-High
+& 148.54 & 52.99 & 94.16
+& \textbf{144.13} & 15.25 & 19.15
+& 194.98 & \textbf{15.22} & 19.08
+& 190.65 & 15.55 & \textbf{19.06}
+& 175.14 & 15.79 & 21.07 \\
+
+MMLU-College
+& 77.89 & 49.62 & 94.22
+& \textbf{74.52} & 15.01 & 17.07
+& 100.01 & \textbf{14.97} & 19.08
+& 99.40 & 15.24 & \textbf{16.92}
+& 90.39 & 15.55 & 20.08 \\
+
+GPQA
+& \textbf{103.64} & 67.47 & 94.24
+& 197.90 & 15.62 & 20.01
+& 266.45 & \textbf{15.58} & 19.94
+& 243.85 & 16.01 & \textbf{19.92}
+& 233.72 & 16.14 & 20.55 \\
+\bottomrule
+\end{tabular}%
+}
+
+\vspace{2mm}
+{\scriptsize
+\textit{Evaluation settings.}
+Laplace: MC=100000, chunk size=512, eval batch size=32 \quad
+BLoB: sample prediction, MC=32, eval batch size=48 \quad
+TFB-LoRA: MC=32, eval batch size=48 \quad
+C-LoRA: sample prediction, MC=32, eval batch size=48 \quad
+Seq-LoRA: MC=32, eval batch size=48.
+}
+\end{table*}

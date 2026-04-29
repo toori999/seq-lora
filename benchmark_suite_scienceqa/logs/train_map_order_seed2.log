@@ -1,0 +1,185 @@
+$ /home/tori/miniconda3_new/envs/seq-lora/bin/python -c import train_scienceqa_qwen35_9b_lora_map_leftpad as m; runner=getattr(m,'base',m); runner.MICRO_BSZ=4; runner.GRAD_ACCUM=2; runner.EVAL_BSZ=32; runner.SEEDS=[2]; runner.main()
+
+[Train Raw] total=5991
+  grade2: 592
+  grade3: 849
+  grade4: 955
+  grade5: 820
+  grade6: 559
+  grade7: 727
+  grade8: 530
+  grade9: 279
+  grade10: 340
+  grade11: 340
+[Train Raw] choice-counts=2-choice=4062, 3-choice=1267, 4-choice=662
+[Eval Raw] total=2063
+  grade2: 170
+  grade3: 287
+  grade4: 301
+  grade5: 298
+  grade6: 182
+  grade7: 274
+  grade8: 205
+  grade9: 122
+  grade10: 119
+  grade11: 105
+[Eval Raw] choice-counts=2-choice=1409, 3-choice=428, 4-choice=226
+
+Saving the dataset (0/1 shards):   0%|          | 0/5991 [00:00<?, ? examples/s]
+Saving the dataset (1/1 shards): 100%|██████████| 5991/5991 [00:00<00:00, 110094.00 examples/s]
+Saving the dataset (1/1 shards): 100%|██████████| 5991/5991 [00:00<00:00, 108187.09 examples/s]
+[Save] kfac_balanced slices -> ./slice_data/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/kfac_balanced
+
+==========================================================================================
+[Run] dataset=scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad | seed=2
+==========================================================================================
+Using device: cuda
+[ScienceQA scoring] left-padded 2/3/4-choice last-token classification over A-D with masking
+[Source Eval Split] test
+[Batch Config] micro_bsz=4 grad_accum=2 effective_train_bsz=8 eval_bsz=32
+`torch_dtype` is deprecated! Use `dtype` instead!
+
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 399/399 [00:00<00:00, 6770.40it/s]
+[Model] attn_implementation=sdpa
+
+Map:   0%|          | 0/5991 [00:00<?, ? examples/s]
+Map:  67%|██████▋   | 4000/5991 [00:00<00:00, 22765.50 examples/s]
+Map: 100%|██████████| 5991/5991 [00:00<00:00, 21211.05 examples/s]
+
+Filter:   0%|          | 0/5991 [00:00<?, ? examples/s]
+Filter: 100%|██████████| 5991/5991 [00:00<00:00, 43029.29 examples/s]
+Filter: 100%|██████████| 5991/5991 [00:00<00:00, 42739.11 examples/s]
+[Processed] train=5991 eval=2063
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+[Head] trimmed lm_head to 4 choice logits
+[Base Eval] seed=2 | NLL=0.4723 ACC=78.48% ECE=3.84%
+[PEFT] Resolved all-layer target modules: 73
+  - lm_head
+  - model.layers.0.self_attn.q_proj
+  - model.layers.0.self_attn.v_proj
+  - model.layers.1.self_attn.q_proj
+  - model.layers.1.self_attn.v_proj
+  - model.layers.10.self_attn.q_proj
+  - model.layers.10.self_attn.v_proj
+  - model.layers.11.self_attn.q_proj
+  - model.layers.11.self_attn.v_proj
+  - model.layers.12.self_attn.q_proj
+  - model.layers.12.self_attn.v_proj
+  - model.layers.13.self_attn.q_proj
+  - model.layers.13.self_attn.v_proj
+  - model.layers.14.self_attn.q_proj
+  - model.layers.14.self_attn.v_proj
+  - model.layers.15.self_attn.q_proj
+  - model.layers.15.self_attn.v_proj
+  - model.layers.16.self_attn.q_proj
+  - model.layers.16.self_attn.v_proj
+  - model.layers.17.self_attn.q_proj
+  - model.layers.17.self_attn.v_proj
+  - model.layers.18.self_attn.q_proj
+  - model.layers.18.self_attn.v_proj
+  - model.layers.19.self_attn.q_proj
+  - model.layers.19.self_attn.v_proj
+  - model.layers.2.self_attn.q_proj
+  - model.layers.2.self_attn.v_proj
+  - model.layers.20.self_attn.q_proj
+  - model.layers.20.self_attn.v_proj
+  - model.layers.21.self_attn.q_proj
+  - model.layers.21.self_attn.v_proj
+  - model.layers.22.self_attn.q_proj
+  - model.layers.22.self_attn.v_proj
+  - model.layers.23.self_attn.q_proj
+  - model.layers.23.self_attn.v_proj
+  - model.layers.24.self_attn.q_proj
+  - model.layers.24.self_attn.v_proj
+  - model.layers.25.self_attn.q_proj
+  - model.layers.25.self_attn.v_proj
+  - model.layers.26.self_attn.q_proj
+  - model.layers.26.self_attn.v_proj
+  - model.layers.27.self_attn.q_proj
+  - model.layers.27.self_attn.v_proj
+  - model.layers.28.self_attn.q_proj
+  - model.layers.28.self_attn.v_proj
+  - model.layers.29.self_attn.q_proj
+  - model.layers.29.self_attn.v_proj
+  - model.layers.3.self_attn.q_proj
+  - model.layers.3.self_attn.v_proj
+  - model.layers.30.self_attn.q_proj
+  - model.layers.30.self_attn.v_proj
+  - model.layers.31.self_attn.q_proj
+  - model.layers.31.self_attn.v_proj
+  - model.layers.32.self_attn.q_proj
+  - model.layers.32.self_attn.v_proj
+  - model.layers.33.self_attn.q_proj
+  - model.layers.33.self_attn.v_proj
+  - model.layers.34.self_attn.q_proj
+  - model.layers.34.self_attn.v_proj
+  - model.layers.35.self_attn.q_proj
+  - model.layers.35.self_attn.v_proj
+  - model.layers.4.self_attn.q_proj
+  - model.layers.4.self_attn.v_proj
+  - model.layers.5.self_attn.q_proj
+  - model.layers.5.self_attn.v_proj
+  - model.layers.6.self_attn.q_proj
+  - model.layers.6.self_attn.v_proj
+  - model.layers.7.self_attn.q_proj
+  - model.layers.7.self_attn.v_proj
+  - model.layers.8.self_attn.q_proj
+  - model.layers.8.self_attn.v_proj
+  - model.layers.9.self_attn.q_proj
+  - model.layers.9.self_attn.v_proj
+[Init LoRA] saved shared init to ./iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_2/init_lora.pt
+[PEFT] Trainable parameters:
+trainable params: 3,866,656 || all params: 7,572,288,544 || trainable%: 0.0511
+[Train] run_dir=./iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_2
+[Params] total=7,572,288,544 trainable(LoRA)=3,866,656
+[Train] step=  100 avg_loss=0.3133 seen=800 time=0.4m
+[Eval] step=100 NLL=0.3347 ACC=87.06% ECE=4.28%
+[Train] step=  200 avg_loss=0.1344 seen=1600 time=1.2m
+[Eval] step=200 NLL=0.3594 ACC=88.32% ECE=6.73%
+[Train] step=  300 avg_loss=0.1271 seen=2400 time=2.0m
+[Eval] step=300 NLL=0.4197 ACC=88.37% ECE=8.34%
+[Train] step=  400 avg_loss=0.1313 seen=3200 time=2.7m
+[Eval] step=400 NLL=0.3008 ACC=89.14% ECE=5.69%
+[Train] step=  500 avg_loss=0.3543 seen=4000 time=3.5m
+[Eval] step=500 NLL=0.2350 ACC=90.21% ECE=3.14%
+[Train] step=  600 avg_loss=0.3952 seen=4800 time=4.4m
+[Eval] step=600 NLL=0.1863 ACC=90.98% ECE=1.78%
+[Train] step=  700 avg_loss=0.2677 seen=5600 time=5.3m
+[Eval] step=700 NLL=0.1604 ACC=92.44% ECE=1.55%
+[Train] step=  800 avg_loss=0.2147 seen=6400 time=6.2m
+[Eval] step=800 NLL=0.1609 ACC=93.12% ECE=2.02%
+[Train] step=  900 avg_loss=0.0626 seen=7200 time=7.1m
+[Eval] step=900 NLL=0.2119 ACC=93.17% ECE=3.93%
+[Train] step= 1000 avg_loss=0.0484 seen=8000 time=8.0m
+/home/tori/miniconda3_new/envs/seq-lora/lib/python3.12/site-packages/peft/utils/save_and_load.py:279: UserWarning: Setting `save_embedding_layers` to `True` as embedding layers found in `target_modules`.
+  warnings.warn("Setting `save_embedding_layers` to `True` as embedding layers found in `target_modules`.")
+[Eval] step=1000 NLL=0.2407 ACC=93.41% ECE=4.54%
+[Train] step= 1100 avg_loss=0.0806 seen=8800 time=8.9m
+[Eval] step=1100 NLL=0.2224 ACC=93.02% ECE=4.54%
+[Train] step= 1200 avg_loss=0.1365 seen=9600 time=9.8m
+[Eval] step=1200 NLL=0.1843 ACC=93.31% ECE=3.85%
+[Train] step= 1300 avg_loss=0.1634 seen=10400 time=10.8m
+[Eval] step=1300 NLL=0.1789 ACC=93.21% ECE=3.79%
+[Train] step= 1400 avg_loss=0.2301 seen=11200 time=11.7m
+[Eval] step=1400 NLL=0.1386 ACC=93.60% ECE=2.69%
+[Train] step= 1500 avg_loss=0.1203 seen=12000 time=12.7m
+[Eval] step=1500 NLL=0.1413 ACC=94.13% ECE=2.35%
+[Train] step= 1600 avg_loss=0.0706 seen=12800 time=13.5m
+[Eval] step=1600 NLL=0.1471 ACC=94.33% ECE=2.75%
+[Train] step= 1700 avg_loss=0.0363 seen=13600 time=14.5m
+[Eval] step=1700 NLL=0.1589 ACC=94.33% ECE=2.99%
+[Train] step= 1800 avg_loss=0.0304 seen=14400 time=15.4m
+[Eval] step=1800 NLL=0.1751 ACC=94.47% ECE=3.29%
+[Train] step= 1900 avg_loss=0.0523 seen=15200 time=16.3m
+[Eval] step=1900 NLL=0.1803 ACC=94.38% ECE=3.49%
+[Train] step= 2000 avg_loss=0.1270 seen=16000 time=17.2m
+[Eval] step=2000 NLL=0.1801 ACC=94.47% ECE=3.57%
+[MAP cached] step=2000 (LoRA-only state_dict cached)
+[Save] MAP adapter -> ./iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_2/map_step_2000
+[Final] seed=2 | NLL=0.1801 ACC=94.47% ECE=3.57%
+
+==========================================================================================
+[Summary] dataset=scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad
+  seed=2 | NLL=0.1801 ACC=94.47% ECE=3.57%
+==========================================================================================

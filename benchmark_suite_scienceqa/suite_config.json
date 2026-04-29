@@ -1,0 +1,93 @@
+{
+  "created_at": "2026-04-08T00:00:26.361947+00:00",
+  "cwd": "/home/tori/projects/Seq-LoRA/Seq_LoRA",
+  "source_task": "scienceqa_closedchoice_grade2_11",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "eval_tasks": [
+    "iid",
+    "scienceqa_closedchoice_grade12",
+    "obqa",
+    "arc-c",
+    "mmlu_science_high",
+    "mmlu_science_college",
+    "gpqa_main"
+  ],
+  "map_micro_bsz": 4,
+  "map_grad_accum": 2,
+  "map_eval_bsz": 32,
+  "constant_q_var": 1.0,
+  "blob_eval_n": 10,
+  "mcdrop_mc_samples": 32,
+  "mcdrop_temp": 1.0,
+  "laplace_fit_bsz": 2,
+  "laplace_bsz": 4,
+  "laplace_prior_optim_step": 100,
+  "laplace_mc_samples": 32,
+  "laplace_mc_chunk": 8,
+  "ensemble_total_seeds": 25,
+  "ensemble_num_groups": 5,
+  "ensemble_groups": [
+    [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    [
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    [
+      10,
+      11,
+      12,
+      13,
+      14
+    ],
+    [
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    [
+      20,
+      21,
+      22,
+      23,
+      24
+    ]
+  ],
+  "resume": true,
+  "map_variants": {
+    "order": {
+      "module_name": "train_scienceqa_qwen35_9b_lora_map_leftpad",
+      "output_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad",
+      "run_tag": "scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad",
+      "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/kfac_balanced"
+    },
+    "reverse": {
+      "module_name": "train_scienceqa_qwen35_9b_lora_map_leftpad_grade_desc",
+      "output_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad_reversegrade",
+      "run_tag": "scienceqa_text_closedchoice_grade2_11_reversegrade_qv_lmhead_leftpad",
+      "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/scienceqa_text_closedchoice_grade2_11_reversegrade_qv_lmhead_leftpad/kfac_balanced"
+    },
+    "random": {
+      "module_name": "train_scienceqa_qwen35_9b_lora_map_leftpad_random",
+      "output_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad_random",
+      "run_tag": "scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad",
+      "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/kfac_balanced"
+    }
+  }
+}

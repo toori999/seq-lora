@@ -66,7 +66,7 @@ N_KFAC = 16
 LR_THRESHOLD = 256
 MAX_KFAC_SAMPLES_PER_SLICE = 2048
 
-MU_OBS_SCALE = 2
+MU_OBS_SCALE = 1
 MU_OBS_BATCHES = 32
 S_Q = 1.0
 P1_VAR = 1.0
@@ -91,6 +91,12 @@ TAU_MODE = "fixed"
 TAU_GRID = "0.0,0.05,0.1,0.2,0.5,1.0"
 TAU_SELECT_METRIC = "nll"
 TAU_SEARCH_MC_SAMPLES = 0
+TAU_FIT_MAX = 1.0
+TAU_FIT_THRESHOLD = 0.003
+TAU_FIT_SEARCH_ITERS = 5
+TAU_FIT_ANCHOR_SPLIT = "val"
+TAU_FIT_ANCHOR_SIZE = 500
+TAU_FIT_ANCHOR_N_SAMPLES = 10
 DIAGNOSTIC_TARGET_REL_GRID = "0.02,0.05,0.10"
 
 from common_eval_utils import (
@@ -1521,6 +1527,207 @@ def eval_bayes_fast_restricted_4way_probmean(
         "time_bayes_sec": float(bayes_extra_time),
     }
     return metrics
+
+
+@torch.inference_mode()
+def _collect_bayes_probs_for_tau_fit(
+    model: nn.Module,
+    loader: DataLoader,
+    device: torch.device,
+    amp_dtype: torch.dtype,
+    num_classes: int,
+    choice_token_ids: Tensor,
+    lora_cache: List[_LoraACache],
+    x_samples_T: Tensor,
+    posterior_scale_tau: float,
+    temp_bayes: float,
+    max_mc_samples: int,
+    mc_eval_chunk: int,
+    progress_desc: Optional[str] = None,
+    apply_choice_mask: bool = True,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    model.eval()
+    _set_inference_fast(model)
+
+    scale = float(posterior_scale_tau) / math.sqrt(max(len(lora_cache), 1))
+    S = min(int(max_mc_samples), int(x_samples_T.shape[0]))
+    if S <= 0:
+        raise ValueError("max_mc_samples must be positive.")
+    chunk_size = S if int(mc_eval_chunk) <= 0 else min(int(mc_eval_chunk), S)
+
+    weight_tensors = [spec.weight.data for spec in lora_cache]
+    all_probs: List[torch.Tensor] = []
+    all_labels: List[torch.Tensor] = []
+    eps = 1e-12
+
+    iterator = loader
+    progress = None
+    if progress_desc:
+        progress = tqdm(loader, desc=progress_desc, unit="batch", leave=False)
+        iterator = progress
+
+    for batch in iterator:
+        lengths_cpu = batch["attention_mask"].sum(dim=1)
+        Lmax = max(int(lengths_cpu.max().item()), 1)
+
+        ids = batch["input_ids"][:, -Lmax:].to(device, non_blocking=True)
+        attn = batch["attention_mask"][:, -Lmax:].to(device, non_blocking=True)
+        labels = batch["labels"].to(device, non_blocking=True)
+        num_choices = batch.get("num_choices")
+        bsz = int(labels.size(0))
+        probs_acc_batch = torch.zeros((bsz, num_classes), device=device, dtype=torch.float32)
+
+        for chunk_start in range(0, S, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, S)
+            x_chunk = x_samples_T[chunk_start:chunk_end].to(
+                device=device,
+                dtype=torch.float32,
+                non_blocking=True,
+            ).contiguous()
+            for local_idx in range(x_chunk.shape[0]):
+                deltas_s = _compute_deltas_for_one_sample(lora_cache, x_chunk[local_idx], scale)
+                torch._foreach_add_(weight_tensors, deltas_s)
+
+                logits = compute_choice_logits(
+                    model=model,
+                    input_ids=ids,
+                    attention_mask=attn,
+                    amp_dtype=amp_dtype,
+                    choice_token_ids=choice_token_ids,
+                )
+                if apply_choice_mask:
+                    logits = _mask_invalid_choices(logits, num_choices)
+                probs_acc_batch.add_(torch.softmax(logits, dim=-1))
+
+                torch._foreach_sub_(weight_tensors, deltas_s)
+            del x_chunk
+
+        probs_batch = probs_acc_batch / float(S)
+        if temp_bayes != 1.0:
+            p = probs_batch.clamp_min(eps) ** (1.0 / float(temp_bayes))
+            probs_batch = p / p.sum(dim=-1, keepdim=True)
+
+        all_probs.append(probs_batch.detach())
+        all_labels.append(labels.detach())
+        del probs_acc_batch, probs_batch, ids, attn, labels
+
+    if progress is not None:
+        progress.close()
+
+    probs_all = torch.cat(all_probs, dim=0) if all_probs else torch.empty((0, num_classes), device=device)
+    labels_all = torch.cat(all_labels, dim=0) if all_labels else torch.empty((0,), dtype=torch.long, device=device)
+    return probs_all, labels_all
+
+
+@torch.inference_mode()
+def fit_seq_lora_tau_tfb_style(
+    model: nn.Module,
+    anchor_loader: DataLoader,
+    device: torch.device,
+    amp_dtype: torch.dtype,
+    num_classes: int,
+    choice_token_ids: Tensor,
+    lora_cache: List[_LoraACache],
+    x_samples_T: Tensor,
+    tau_max: float,
+    threshold: float,
+    search_iters: int,
+    anchor_n_samples: int,
+    temp_bayes: float,
+    mc_eval_chunk: int,
+    apply_choice_mask: bool,
+) -> Dict[str, float]:
+    tau_max = float(tau_max)
+    if tau_max <= 0.0:
+        raise ValueError(f"tau_max must be positive, got {tau_max}")
+
+    ref_probs, _ = _collect_bayes_probs_for_tau_fit(
+        model=model,
+        loader=anchor_loader,
+        device=device,
+        amp_dtype=amp_dtype,
+        num_classes=num_classes,
+        choice_token_ids=choice_token_ids,
+        lora_cache=lora_cache,
+        x_samples_T=x_samples_T,
+        posterior_scale_tau=0.0,
+        temp_bayes=temp_bayes,
+        max_mc_samples=1,
+        mc_eval_chunk=mc_eval_chunk,
+        progress_desc="TAU-FIT ref tau=0",
+        apply_choice_mask=apply_choice_mask,
+    )
+    ref_preds = ref_probs.argmax(dim=-1)
+    ref_nll = F.nll_loss(torch.log(ref_probs.clamp_min(1e-12)), ref_preds)
+
+    low, high = 0.0, tau_max
+    best_tau = high
+    best_ratio = float("nan")
+    best_nll = float("nan")
+
+    for step in range(int(search_iters)):
+        mid = (low + high) / 2.0
+        probs_mid, _ = _collect_bayes_probs_for_tau_fit(
+            model=model,
+            loader=anchor_loader,
+            device=device,
+            amp_dtype=amp_dtype,
+            num_classes=num_classes,
+            choice_token_ids=choice_token_ids,
+            lora_cache=lora_cache,
+            x_samples_T=x_samples_T,
+            posterior_scale_tau=float(mid),
+            temp_bayes=temp_bayes,
+            max_mc_samples=anchor_n_samples,
+            mc_eval_chunk=mc_eval_chunk,
+            progress_desc=f"TAU-FIT tau={mid:.4f}",
+            apply_choice_mask=apply_choice_mask,
+        )
+        cur_nll = F.nll_loss(torch.log(probs_mid.clamp_min(1e-12)), ref_preds)
+        ratio = (abs(cur_nll.item() - ref_nll.item()) / max(ref_nll.item(), 1e-12)) / max(ref_preds.numel(), 1)
+        print(
+            f"[Tau fit] iter={step + 1}/{int(search_iters)} tau={mid:.6f} "
+            f"ref_nll={ref_nll.item():.6f} cur_nll={cur_nll.item():.6f} ratio={ratio:.8f}",
+            flush=True,
+        )
+        if ratio > float(threshold):
+            best_tau = mid
+            best_ratio = float(ratio)
+            best_nll = float(cur_nll.item())
+            high = mid
+        else:
+            low = mid
+        del probs_mid
+
+    print(f"[Tau fit] selected posterior_tau={best_tau:.6f}", flush=True)
+    return {
+        "optimal_posterior_tau": float(best_tau),
+        "reference_nll": float(ref_nll.item()),
+        "selected_nll": float(best_nll),
+        "selected_ratio": float(best_ratio),
+        "threshold": float(threshold),
+        "tau_max": float(tau_max),
+        "search_iters": int(search_iters),
+        "anchor_n_samples": int(anchor_n_samples),
+    }
+
+
+def _get_source_split(task: str, split: str) -> Tuple[Dataset, str]:
+    train_ds, val_ds, test_ds = load_task_dataset(task)
+    split_norm = str(split).strip().lower()
+    if split_norm == "train":
+        return train_ds, "train"
+    if split_norm in {"val", "validation"}:
+        return val_ds, "validation"
+    if split_norm == "test":
+        return test_ds, "test"
+    raise ValueError(f"Unsupported tau anchor split: {split}")
+
+
+def _subset_dataset(ds: Dataset, subset_size: int, seed: int) -> Dataset:
+    if int(subset_size) <= 0 or int(subset_size) >= len(ds):
+        return ds
+    return ds.shuffle(seed=int(seed)).select(range(int(subset_size)))
 # =========================
 # Main
 # =========================
@@ -1663,8 +1870,11 @@ def main():
         "--tau_mode",
         type=str,
         default=TAU_MODE,
-        choices=["fixed", "auto"],
-        help="Whether to use a fixed posterior_tau or tune it automatically on the source-task validation split.",
+        choices=["fixed", "auto", "tfb"],
+        help=(
+            "Whether to use a fixed posterior_tau, tune it by validation metrics, "
+            "or fit it with the TFB-style pseudo-label NLL threshold."
+        ),
     )
     parser.add_argument(
         "--tau_grid",
@@ -1684,6 +1894,42 @@ def main():
         type=int,
         default=TAU_SEARCH_MC_SAMPLES,
         help="Optional MC sample budget used only during automatic tau search. <=0 reuses mc_eval_samples.",
+    )
+    parser.add_argument(
+        "--tau_fit_max",
+        type=float,
+        default=TAU_FIT_MAX,
+        help="Upper bound for TFB-style posterior_tau binary search when tau_mode=tfb.",
+    )
+    parser.add_argument(
+        "--tau_fit_threshold",
+        type=float,
+        default=TAU_FIT_THRESHOLD,
+        help="TFB-style normalized pseudo-label NLL ratio threshold for tau_mode=tfb.",
+    )
+    parser.add_argument(
+        "--tau_fit_search_iters",
+        type=int,
+        default=TAU_FIT_SEARCH_ITERS,
+        help="Number of binary-search iterations used when tau_mode=tfb.",
+    )
+    parser.add_argument(
+        "--tau_fit_anchor_split",
+        type=str,
+        default=TAU_FIT_ANCHOR_SPLIT,
+        help="Source split used as the anchor set when tau_mode=tfb.",
+    )
+    parser.add_argument(
+        "--tau_fit_anchor_size",
+        type=int,
+        default=TAU_FIT_ANCHOR_SIZE,
+        help="Maximum number of anchor examples used when tau_mode=tfb. <=0 uses the full split.",
+    )
+    parser.add_argument(
+        "--tau_fit_anchor_n_samples",
+        type=int,
+        default=TAU_FIT_ANCHOR_N_SAMPLES,
+        help="MC samples per midpoint used by the TFB-style tau fit.",
     )
     parser.add_argument(
         "--report_delta_a_ratio",
@@ -1734,7 +1980,9 @@ def main():
         f"[Tau] mode={args.tau_mode} "
         f"fixed_tau={float(args.posterior_tau):.4f} "
         f"select_metric={args.tau_select_metric} "
-        f"grid={tau_grid}"
+        f"grid={tau_grid} "
+        f"fit_max={float(args.tau_fit_max):.4f} "
+        f"fit_threshold={float(args.tau_fit_threshold):.6f}"
     )
 
     peft_cfg = PeftConfig.from_pretrained(args.map_dir)

@@ -1,0 +1,60 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using device: cuda amp_dtype: torch.bfloat16
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = /home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_7/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 6945.02it/s]
+[Head] trimmed lm_head to 4 choice logits
+[TIME] LOAD-STAGE MAP on scienceqa_closedchoice_grade2_11: 5.18 sec (0.09 min)
+[PEAK] LOAD-STAGE MAP on scienceqa_closedchoice_grade2_11: alloc=15.26 GB  reserved=15.43 GB
+
+========================
+        MAP ONLY        
+========================
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+[TIME] INFER MAP on scienceqa_closedchoice_grade2_11(test): 11.65 sec (0.19 min)
+[PEAK] INFER MAP on scienceqa_closedchoice_grade2_11(test): alloc=17.74 GB  reserved=24.76 GB
+
+[scienceqa_closedchoice_grade2_11(test)][MAP]
+  NLL=0.1831  ACC=93.89%  ECE=3.99%  Brier=0.0918
+[TIME] INFER MAP on scienceqa_closedchoice_grade12(ood): 2.81 sec (0.05 min)
+[PEAK] INFER MAP on scienceqa_closedchoice_grade12(ood): alloc=16.56 GB  reserved=24.76 GB
+
+[scienceqa_closedchoice_grade12(ood)][MAP]
+  NLL=0.3364  ACC=92.26%  ECE=5.90%  Brier=0.1202
+
+=== Loading Dataset for Task: obqa ===
+[TIME] INFER MAP on obqa(ood): 3.35 sec (0.06 min)
+[PEAK] INFER MAP on obqa(ood): alloc=17.12 GB  reserved=19.32 GB
+
+[obqa(ood)][MAP]
+  NLL=0.5529  ACC=88.40%  ECE=8.59%  Brier=0.2001
+
+=== Loading Dataset for Task: arc-c ===
+[TIME] INFER MAP on arc-c(ood): 8.68 sec (0.14 min)
+[PEAK] INFER MAP on arc-c(ood): alloc=17.39 GB  reserved=23.14 GB
+
+[arc-c(ood)][MAP]
+  NLL=0.4366  ACC=91.04%  ECE=7.31%  Brier=0.1548
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[TIME] INFER MAP on mmlu_science_high(ood): 7.17 sec (0.12 min)
+[PEAK] INFER MAP on mmlu_science_high(ood): alloc=18.47 GB  reserved=23.14 GB
+
+[mmlu_science_high(ood)][MAP]
+  NLL=0.8280  ACC=81.48%  ECE=13.08%  Brier=0.3012
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[TIME] INFER MAP on mmlu_science_college(ood): 3.87 sec (0.06 min)
+[PEAK] INFER MAP on mmlu_science_college(ood): alloc=16.97 GB  reserved=22.51 GB
+
+[mmlu_science_college(ood)][MAP]
+  NLL=1.1113  ACC=73.99%  ECE=15.72%  Brier=0.4213
+[TIME] INFER MAP on gpqa_main(ood): 8.69 sec (0.14 min)
+[PEAK] INFER MAP on gpqa_main(ood): alloc=20.33 GB  reserved=26.49 GB
+
+[gpqa_main(ood)][MAP]
+  NLL=1.9605  ACC=36.38%  ECE=33.43%  Brier=0.8826

@@ -1,0 +1,167 @@
+[Train Raw] total=5991
+  grade2: 592
+  grade3: 849
+  grade4: 955
+  grade5: 820
+  grade6: 559
+  grade7: 727
+  grade8: 530
+  grade9: 279
+  grade10: 340
+  grade11: 340
+[Train Raw] choice-counts=2-choice=4062, 3-choice=1267, 4-choice=662
+[Eval Raw] total=2063
+  grade2: 170
+  grade3: 287
+  grade4: 301
+  grade5: 298
+  grade6: 182
+  grade7: 274
+  grade8: 205
+  grade9: 122
+  grade10: 119
+  grade11: 105
+[Eval Raw] choice-counts=2-choice=1409, 3-choice=428, 4-choice=226
+[Save] kfac_balanced slices -> ./slice_data/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/kfac_balanced
+
+==========================================================================================
+[Run] dataset=scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad | seed=7
+==========================================================================================
+Using device: cuda
+[ScienceQA scoring] left-padded 2/3/4-choice last-token classification over A-D with masking
+[Source Eval Split] test
+[Batch Config] micro_bsz=4 grad_accum=2 effective_train_bsz=8 eval_bsz=32
+[Model] attn_implementation=sdpa
+[Processed] train=5991 eval=2063
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+[Head] trimmed lm_head to 4 choice logits
+[Base Eval] seed=7 | NLL=0.4723 ACC=78.48% ECE=4.12%
+[PEFT] Resolved all-layer target modules: 73
+  - lm_head
+  - model.layers.0.self_attn.q_proj
+  - model.layers.0.self_attn.v_proj
+  - model.layers.1.self_attn.q_proj
+  - model.layers.1.self_attn.v_proj
+  - model.layers.10.self_attn.q_proj
+  - model.layers.10.self_attn.v_proj
+  - model.layers.11.self_attn.q_proj
+  - model.layers.11.self_attn.v_proj
+  - model.layers.12.self_attn.q_proj
+  - model.layers.12.self_attn.v_proj
+  - model.layers.13.self_attn.q_proj
+  - model.layers.13.self_attn.v_proj
+  - model.layers.14.self_attn.q_proj
+  - model.layers.14.self_attn.v_proj
+  - model.layers.15.self_attn.q_proj
+  - model.layers.15.self_attn.v_proj
+  - model.layers.16.self_attn.q_proj
+  - model.layers.16.self_attn.v_proj
+  - model.layers.17.self_attn.q_proj
+  - model.layers.17.self_attn.v_proj
+  - model.layers.18.self_attn.q_proj
+  - model.layers.18.self_attn.v_proj
+  - model.layers.19.self_attn.q_proj
+  - model.layers.19.self_attn.v_proj
+  - model.layers.2.self_attn.q_proj
+  - model.layers.2.self_attn.v_proj
+  - model.layers.20.self_attn.q_proj
+  - model.layers.20.self_attn.v_proj
+  - model.layers.21.self_attn.q_proj
+  - model.layers.21.self_attn.v_proj
+  - model.layers.22.self_attn.q_proj
+  - model.layers.22.self_attn.v_proj
+  - model.layers.23.self_attn.q_proj
+  - model.layers.23.self_attn.v_proj
+  - model.layers.24.self_attn.q_proj
+  - model.layers.24.self_attn.v_proj
+  - model.layers.25.self_attn.q_proj
+  - model.layers.25.self_attn.v_proj
+  - model.layers.26.self_attn.q_proj
+  - model.layers.26.self_attn.v_proj
+  - model.layers.27.self_attn.q_proj
+  - model.layers.27.self_attn.v_proj
+  - model.layers.28.self_attn.q_proj
+  - model.layers.28.self_attn.v_proj
+  - model.layers.29.self_attn.q_proj
+  - model.layers.29.self_attn.v_proj
+  - model.layers.3.self_attn.q_proj
+  - model.layers.3.self_attn.v_proj
+  - model.layers.30.self_attn.q_proj
+  - model.layers.30.self_attn.v_proj
+  - model.layers.31.self_attn.q_proj
+  - model.layers.31.self_attn.v_proj
+  - model.layers.32.self_attn.q_proj
+  - model.layers.32.self_attn.v_proj
+  - model.layers.33.self_attn.q_proj
+  - model.layers.33.self_attn.v_proj
+  - model.layers.34.self_attn.q_proj
+  - model.layers.34.self_attn.v_proj
+  - model.layers.35.self_attn.q_proj
+  - model.layers.35.self_attn.v_proj
+  - model.layers.4.self_attn.q_proj
+  - model.layers.4.self_attn.v_proj
+  - model.layers.5.self_attn.q_proj
+  - model.layers.5.self_attn.v_proj
+  - model.layers.6.self_attn.q_proj
+  - model.layers.6.self_attn.v_proj
+  - model.layers.7.self_attn.q_proj
+  - model.layers.7.self_attn.v_proj
+  - model.layers.8.self_attn.q_proj
+  - model.layers.8.self_attn.v_proj
+  - model.layers.9.self_attn.q_proj
+  - model.layers.9.self_attn.v_proj
+[Init LoRA] loaded shared init from ./iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/seed_7/init_lora.pt
+[PEFT] Trainable parameters:
+trainable params: 3,866,656 || all params: 7,572,288,544 || trainable%: 0.0511
+[Train] run_dir=./iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/seed_7
+[Params] total=7,572,288,544 trainable(LoRA)=3,866,656
+[Train] step=  100 avg_loss=0.4348 seen=800 time=0.4m
+[Eval] step=100 NLL=0.3440 ACC=85.75% ECE=2.16%
+[Train] step=  200 avg_loss=0.2876 seen=1600 time=1.2m
+[Eval] step=200 NLL=0.2604 ACC=89.24% ECE=1.13%
+[Train] step=  300 avg_loss=0.2474 seen=2400 time=2.0m
+[Eval] step=300 NLL=0.2295 ACC=90.60% ECE=1.98%
+[Train] step=  400 avg_loss=0.1836 seen=3200 time=2.7m
+[Eval] step=400 NLL=0.2517 ACC=91.03% ECE=4.93%
+[Train] step=  500 avg_loss=0.2534 seen=4000 time=3.5m
+[Eval] step=500 NLL=0.1878 ACC=92.10% ECE=2.44%
+[Train] step=  600 avg_loss=0.1938 seen=4800 time=4.3m
+[Eval] step=600 NLL=0.1690 ACC=92.58% ECE=2.50%
+[Train] step=  700 avg_loss=0.1794 seen=5600 time=5.0m
+[Eval] step=700 NLL=0.1617 ACC=92.83% ECE=2.73%
+[Train] step=  800 avg_loss=0.1404 seen=6400 time=5.8m
+[Eval] step=800 NLL=0.1958 ACC=92.49% ECE=4.04%
+[Train] step=  900 avg_loss=0.1677 seen=7200 time=6.6m
+[Eval] step=900 NLL=0.1635 ACC=93.31% ECE=3.44%
+[Train] step= 1000 avg_loss=0.1416 seen=8000 time=7.4m
+[Eval] step=1000 NLL=0.1430 ACC=94.04% ECE=2.27%
+[Train] step= 1100 avg_loss=0.0973 seen=8800 time=8.2m
+[Eval] step=1100 NLL=0.1653 ACC=93.89% ECE=3.40%
+[Train] step= 1200 avg_loss=0.1090 seen=9600 time=9.0m
+[Eval] step=1200 NLL=0.1634 ACC=94.23% ECE=3.35%
+[Train] step= 1300 avg_loss=0.1355 seen=10400 time=9.8m
+[Eval] step=1300 NLL=0.1377 ACC=94.47% ECE=2.78%
+[Train] step= 1400 avg_loss=0.0882 seen=11200 time=10.6m
+[Eval] step=1400 NLL=0.1513 ACC=93.84% ECE=3.33%
+[Train] step= 1500 avg_loss=0.0940 seen=12000 time=11.3m
+[Eval] step=1500 NLL=0.1631 ACC=94.09% ECE=3.56%
+[Train] step= 1600 avg_loss=0.1249 seen=12800 time=12.1m
+[Eval] step=1600 NLL=0.1624 ACC=94.33% ECE=3.37%
+[Train] step= 1700 avg_loss=0.0702 seen=13600 time=12.9m
+[Eval] step=1700 NLL=0.1785 ACC=94.28% ECE=3.66%
+[Train] step= 1800 avg_loss=0.0730 seen=14400 time=13.7m
+[Eval] step=1800 NLL=0.1738 ACC=94.09% ECE=3.75%
+[Train] step= 1900 avg_loss=0.0550 seen=15200 time=14.4m
+[Eval] step=1900 NLL=0.1771 ACC=94.18% ECE=3.79%
+[Train] step= 2000 avg_loss=0.0802 seen=16000 time=15.2m
+[Eval] step=2000 NLL=0.1780 ACC=94.23% ECE=3.67%
+[MAP cached] step=2000 (LoRA-only state_dict cached)
+[TIME] TRAIN MAP on scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad: 933.51 sec (15.56 min)
+[PEAK] TRAIN MAP on scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad: alloc=19.50 GB  reserved=20.24 GB
+[Save] MAP adapter -> ./iid_qwen35_8b_scienceqa_lora_map_leftpad_random/scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad/seed_7/map_step_2000
+[Final] seed=7 | NLL=0.1780 ACC=94.23% ECE=3.67%
+
+==========================================================================================
+[Summary] dataset=scienceqa_text_closedchoice_grade2_11_random_qv_lmhead_leftpad
+  seed=7 | NLL=0.1780 ACC=94.23% ECE=3.67%
+==========================================================================================

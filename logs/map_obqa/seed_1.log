@@ -1,0 +1,50 @@
+Using device: cuda amp_dtype: torch.bfloat16
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = iid_qwen35_8b_obqa_lora_map_leftpad/obqa_qv_lmhead_leftpad/seed_1/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights:  45%|████▌     | 180/399 [00:00<00:00, 1651.49it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 2095.89it/s]
+[Head] trimmed lm_head to 4 choice logits
+[TIME] LOAD-STAGE MAP on obqa: 30.91 sec (0.52 min)
+[PEAK] LOAD-STAGE MAP on obqa: alloc=15.26 GB  reserved=15.43 GB
+
+========================
+        MAP ONLY        
+========================
+
+=== Loading Dataset for Task: obqa ===
+[TIME] INFER MAP on obqa(test): 3.22 sec (0.05 min)
+[PEAK] INFER MAP on obqa(test): alloc=14.49 GB  reserved=15.43 GB
+
+[obqa(test)][MAP]
+  NLL=0.3527  ACC=92.00%  ECE=6.51%  Brier=0.1407
+
+=== Loading Dataset for Task: arc-e ===
+[TIME] INFER MAP on arc-e(ood): 14.03 sec (0.23 min)
+[PEAK] INFER MAP on arc-e(ood): alloc=14.81 GB  reserved=17.44 GB
+
+[arc-e(ood)][MAP]
+  NLL=0.1340  ACC=97.18%  ECE=1.91%  Brier=0.0510
+
+=== Loading Dataset for Task: arc-c ===
+[TIME] INFER MAP on arc-c(ood): 8.10 sec (0.14 min)
+[PEAK] INFER MAP on arc-c(ood): alloc=14.85 GB  reserved=17.76 GB
+
+[arc-c(ood)][MAP]
+  NLL=0.3421  ACC=92.13%  ECE=6.06%  Brier=0.1370
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[TIME] INFER MAP on mmlu_science_high(ood): 5.98 sec (0.10 min)
+[PEAK] INFER MAP on mmlu_science_high(ood): alloc=15.26 GB  reserved=18.82 GB
+
+[mmlu_science_high(ood)][MAP]
+  NLL=0.7595  ACC=81.48%  ECE=12.34%  Brier=0.3028
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+[TIME] INFER MAP on mmlu_science_college(ood): 3.07 sec (0.05 min)
+[PEAK] INFER MAP on mmlu_science_college(ood): alloc=15.00 GB  reserved=18.82 GB
+
+[mmlu_science_college(ood)][MAP]
+  NLL=0.9641  ACC=71.97%  ECE=16.29%  Brier=0.4121

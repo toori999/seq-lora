@@ -1,0 +1,212 @@
+{
+  "name": "seq_constantq_order_seed4",
+  "seed": 4,
+  "source_order": "order",
+  "command": [
+    "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+    "seq_eval_iid_constantq.py",
+    "--task",
+    "scienceqa_closedchoice_grade2_11",
+    "--slices_dir",
+    "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/kfac_balanced",
+    "--map_dir",
+    "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_4/map_step_2000",
+    "--eval_tasks",
+    "iid,scienceqa_closedchoice_grade12,obqa,arc-c,mmlu_science_high,mmlu_science_college,gpqa_main",
+    "--constant_q_var",
+    "1.0",
+    "--forecast_horizon",
+    "0"
+  ],
+  "started_at": "2026-04-07T22:40:39.213645+00:00",
+  "finished_at": "2026-04-07T23:17:28.229557+00:00",
+  "returncode": 0,
+  "wall_time_sec": 2191.7104114589893,
+  "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/benchmark_suite_scienceqa/logs/seq_constantq_order_seed4.log",
+  "artifacts": {
+    "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_4/map_step_2000",
+    "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/kfac_balanced"
+  },
+  "stage_times_sec": {
+    "TRAIN-STAGE Seq-LoRA posterior build on scienceqa_closedchoice_grade2_11": 283.65,
+    "INFER Seq-LoRA on scienceqa_closedchoice_grade2_11_iid": 510.85,
+    "INFER Seq-LoRA on scienceqa_closedchoice_grade12_ood": 104.49,
+    "INFER Seq-LoRA on obqa_ood": 113.23,
+    "INFER Seq-LoRA on arc-c_ood": 368.86,
+    "INFER Seq-LoRA on mmlu_science_high_ood": 270.86,
+    "INFER Seq-LoRA on mmlu_science_college_ood": 138.33,
+    "INFER Seq-LoRA on gpqa_main_ood": 367.25
+  },
+  "stage_peaks_gb": {
+    "TRAIN-STAGE Seq-LoRA posterior build on scienceqa_closedchoice_grade2_11": {
+      "alloc_gb": 24.78,
+      "reserved_gb": 25.15
+    },
+    "INFER Seq-LoRA on scienceqa_closedchoice_grade2_11_iid": {
+      "alloc_gb": 15.13,
+      "reserved_gb": 19.29
+    },
+    "INFER Seq-LoRA on scienceqa_closedchoice_grade12_ood": {
+      "alloc_gb": 15.12,
+      "reserved_gb": 19.29
+    },
+    "INFER Seq-LoRA on obqa_ood": {
+      "alloc_gb": 14.93,
+      "reserved_gb": 16.87
+    },
+    "INFER Seq-LoRA on arc-c_ood": {
+      "alloc_gb": 15.14,
+      "reserved_gb": 19.8
+    },
+    "INFER Seq-LoRA on mmlu_science_high_ood": {
+      "alloc_gb": 15.36,
+      "reserved_gb": 19.86
+    },
+    "INFER Seq-LoRA on mmlu_science_college_ood": {
+      "alloc_gb": 15.31,
+      "reserved_gb": 19.86
+    },
+    "INFER Seq-LoRA on gpqa_main_ood": {
+      "alloc_gb": 15.67,
+      "reserved_gb": 20.28
+    }
+  },
+  "train_time_sec": 283.65,
+  "train_peak_alloc_gb": 24.78,
+  "train_peak_reserved_gb": 25.15,
+  "results": [
+    {
+      "method": "seq_constantq_order",
+      "seed": 4,
+      "source_order": "order",
+      "eval_task": "scienceqa_closedchoice_grade2_11",
+      "report_task": "iid",
+      "split": "test",
+      "nll": 0.1711,
+      "acc": 0.9331,
+      "acc_pct": 93.31,
+      "ece": 0.0278,
+      "ece_pct": 2.78,
+      "brier": 0.0973,
+      "infer_time_sec": 510.85,
+      "infer_peak_alloc_gb": 15.13,
+      "infer_peak_reserved_gb": 19.29,
+      "train_time_sec": 283.65,
+      "command_wall_time_sec": 2191.7104114589893
+    },
+    {
+      "method": "seq_constantq_order",
+      "seed": 4,
+      "source_order": "order",
+      "eval_task": "scienceqa_closedchoice_grade12",
+      "report_task": "grade12",
+      "split": "ood",
+      "nll": 0.254,
+      "acc": 0.9226000000000001,
+      "acc_pct": 92.26,
+      "ece": 0.0509,
+      "ece_pct": 5.09,
+      "brier": 0.1446,
+      "infer_time_sec": 104.49,
+      "infer_peak_alloc_gb": 15.12,
+      "infer_peak_reserved_gb": 19.29,
+      "train_time_sec": 283.65,
+      "command_wall_time_sec": 2191.7104114589893
+    },
+    {
+      "method": "seq_constantq_order",
+      "seed": 4,
+      "source_order": "order",
+      "eval_task": "obqa",
+      "report_task": "obqa",
+      "split": "ood",
+      "nll": 0.38,
+      "acc": 0.8640000000000001,
+      "acc_pct": 86.4,
+      "ece": 0.0548,
+      "ece_pct": 5.48,
+      "brier": 0.191,
+      "infer_time_sec": 113.23,
+      "infer_peak_alloc_gb": 14.93,
+      "infer_peak_reserved_gb": 16.87,
+      "train_time_sec": 283.65,
+      "command_wall_time_sec": 2191.7104114589893
+    },
+    {
+      "method": "seq_constantq_order",
+      "seed": 4,
+      "source_order": "order",
+      "eval_task": "arc-c",
+      "report_task": "arc-c",
+      "split": "ood",
+      "nll": 0.2453,
+      "acc": 0.9155,
+      "acc_pct": 91.55,
+      "ece": 0.019799999999999998,
+      "ece_pct": 1.98,
+      "brier": 0.1247,
+      "infer_time_sec": 368.86,
+      "infer_peak_alloc_gb": 15.14,
+      "infer_peak_reserved_gb": 19.8,
+      "train_time_sec": 283.65,
+      "command_wall_time_sec": 2191.7104114589893
+    },
+    {
+      "method": "seq_constantq_order",
+      "seed": 4,
+      "source_order": "order",
+      "eval_task": "mmlu_science_high",
+      "report_task": "mmlu_science_high",
+      "split": "ood",
+      "nll": 0.5145,
+      "acc": 0.8117,
+      "acc_pct": 81.17,
+      "ece": 0.0265,
+      "ece_pct": 2.65,
+      "brier": 0.261,
+      "infer_time_sec": 270.86,
+      "infer_peak_alloc_gb": 15.36,
+      "infer_peak_reserved_gb": 19.86,
+      "train_time_sec": 283.65,
+      "command_wall_time_sec": 2191.7104114589893
+    },
+    {
+      "method": "seq_constantq_order",
+      "seed": 4,
+      "source_order": "order",
+      "eval_task": "mmlu_science_college",
+      "report_task": "mmlu_science_college",
+      "split": "ood",
+      "nll": 0.6979,
+      "acc": 0.6879000000000001,
+      "acc_pct": 68.79,
+      "ece": 0.0703,
+      "ece_pct": 7.03,
+      "brier": 0.3642,
+      "infer_time_sec": 138.33,
+      "infer_peak_alloc_gb": 15.31,
+      "infer_peak_reserved_gb": 19.86,
+      "train_time_sec": 283.65,
+      "command_wall_time_sec": 2191.7104114589893
+    },
+    {
+      "method": "seq_constantq_order",
+      "seed": 4,
+      "source_order": "order",
+      "eval_task": "gpqa_main",
+      "report_task": "gpqa_main",
+      "split": "ood",
+      "nll": 1.4614,
+      "acc": 0.33039999999999997,
+      "acc_pct": 33.04,
+      "ece": 0.17559999999999998,
+      "ece_pct": 17.56,
+      "brier": 0.7679,
+      "infer_time_sec": 367.25,
+      "infer_peak_alloc_gb": 15.67,
+      "infer_peak_reserved_gb": 20.28,
+      "train_time_sec": 283.65,
+      "command_wall_time_sec": 2191.7104114589893
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "train_map_order_seed16",
+  "seed": 16,
+  "source_order": "order",
+  "command": [
+    "/home/tori/miniconda3_new/envs/seq-lora/bin/python",
+    "-c",
+    "import train_scienceqa_qwen35_9b_lora_map_leftpad as m; runner=getattr(m,'base',m); runner.MICRO_BSZ=4; runner.GRAD_ACCUM=2; runner.EVAL_BSZ=32; runner.SEEDS=[16]; runner.main()"
+  ],
+  "started_at": "2026-04-08T03:39:32.772329+00:00",
+  "finished_at": "2026-04-08T03:56:26.793826+00:00",
+  "returncode": 0,
+  "wall_time_sec": 957.356379009987,
+  "log_path": "/home/tori/projects/Seq-LoRA/Seq_LoRA/benchmark_suite_scienceqa/logs/train_map_order_seed16.log",
+  "artifacts": {
+    "map_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_16/map_step_2000",
+    "run_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_16",
+    "slice_dir": "/home/tori/projects/Seq-LoRA/Seq_LoRA/slice_data/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/kfac_balanced",
+    "ensemble_member_only": "true"
+  },
+  "stage_times_sec": {},
+  "stage_peaks_gb": {},
+  "train_time_sec": 957.356379009987,
+  "train_peak_alloc_gb": null,
+  "train_peak_reserved_gb": null,
+  "results": []
+}

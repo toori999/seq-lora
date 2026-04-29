@@ -26,8 +26,7 @@ from tqdm import tqdm
 
 from laplace.curvature.asdl import AsdlGGN, batch_gradient as asdl_batch_gradient
 import asdl.operations.linear as asdl_linear_ops
-import kfac as hook_kfac
-from lssm_ffbs_obs import kalman_filter, lag_one_smoothed_covariances, rts_smoother
+from lssm_ffbs_obs import kalman_filter
 from seq_lora_subspace_obs import (
     build_global_kronecker_eigenspace,
     materialize_mean_psd_from_factors,
@@ -80,6 +79,157 @@ def _patch_asdl_linear_batch_grads_weight_dtype() -> None:
 
 _patch_asdl_linear_batch_grads_weight_dtype()
 
+_POSTERIOR_STATS_CACHE_FORMAT = "seq_lora_constantq_bayesian_peft_posterior_stats_v1"
+
+
+def _cache_norm_path(path: str) -> str:
+    path = str(path or "").strip()
+    return os.path.abspath(os.path.expanduser(path)) if path else ""
+
+
+def _dataset_fingerprint(ds: object) -> str:
+    fingerprint = getattr(ds, "_fingerprint", None)
+    if fingerprint is not None:
+        return str(fingerprint)
+    try:
+        n = len(ds)  # type: ignore[arg-type]
+    except Exception:
+        n = "unknown"
+    return f"{type(ds).__name__}:n={n}"
+
+
+def _serialize_module_specs_cpu(module_specs: List[Dict]) -> List[Dict[str, object]]:
+    specs_cpu: List[Dict[str, object]] = []
+    for spec in module_specs:
+        subspace_info_cpu = {}
+        for key, value in spec["subspace_info"].items():
+            if torch.is_tensor(value):
+                subspace_info_cpu[key] = value.detach().cpu()
+            else:
+                subspace_info_cpu[key] = value
+        specs_cpu.append(
+            {
+                "name": str(spec["name"]),
+                "offset": int(spec["offset"]),
+                "L": int(spec["L"]),
+                "subspace_info": subspace_info_cpu,
+            }
+        )
+    return specs_cpu
+
+
+def _build_posterior_stats_cache_snapshot(
+    args: argparse.Namespace,
+    *,
+    slice_ids: Sequence[int],
+    train_raw_fingerprint: str,
+    train_proc_fingerprint: str,
+) -> Dict[str, object]:
+    return {
+        "task": str(args.task),
+        "map_dir": _cache_norm_path(str(args.map_dir)),
+        "slices_dir": _cache_norm_path(str(args.slices_dir)),
+        "seed": int(args.seed),
+        "kfac_backend": str(args.kfac_backend),
+        "random_num_slices": int(args.random_num_slices),
+        "slice_order": str(args.slice_order),
+        "slice_order_seed": int(args.slice_order_seed),
+        "slice_ids": [int(x) for x in slice_ids],
+        "train_raw_fingerprint": str(train_raw_fingerprint),
+        "train_proc_fingerprint": str(train_proc_fingerprint),
+        "subspace_dim_per_module": int(args.subspace_dim_per_module),
+        "max_seq_len": int(args.max_seq_len),
+        "kfac_bsz": int(args.kfac_bsz),
+        "n_kfac": int(args.n_kfac),
+        "lr_threshold": int(args.lr_threshold),
+        "max_kfac_samples_per_slice": int(args.max_kfac_samples_per_slice),
+        "kfac_tail_policy": "keep",
+        "mu_obs_batches": int(args.mu_obs_batches),
+        "disable_dropout_during_kfac_mu": bool(args.disable_dropout_during_kfac_mu),
+        "tokenizer_padding_side": str(args.tokenizer_padding_side),
+        "keep_full_vocab_lm_head": bool(args.keep_full_vocab_lm_head),
+        "eval_protocol": str(args.eval_protocol),
+        "bayesian_peft_add_space": bool(args.bayesian_peft_add_space),
+        "bayesian_peft_add_eos": bool(args.bayesian_peft_add_eos),
+    }
+
+
+def _build_posterior_stats_cache_payload(
+    *,
+    args: argparse.Namespace,
+    snapshot: Dict[str, object],
+    module_specs: List[Dict],
+    module_R_lists: Dict[str, List[Tensor]],
+    mu_global_list_raw: List[Tensor],
+    T: int,
+) -> Dict[str, object]:
+    return {
+        "format": _POSTERIOR_STATS_CACHE_FORMAT,
+        "args_snapshot": dict(snapshot),
+        "module_specs": _serialize_module_specs_cpu(module_specs),
+        "module_R_lists": {
+            str(name): [tensor.detach().cpu() for tensor in tensors]
+            for name, tensors in module_R_lists.items()
+        },
+        "mu_global_list_raw": [mu_t.detach().cpu() for mu_t in mu_global_list_raw],
+        "T": int(T),
+        "num_modules": int(len(module_specs)),
+        "L_total": int(sum(int(spec["L"]) for spec in module_specs)),
+        "created_by": os.path.basename(__file__),
+        "seed": int(args.seed),
+    }
+
+
+def _validate_cache_snapshot(
+    *,
+    cache_path: str,
+    snapshot: Dict[str, object],
+    expected: Dict[str, object],
+) -> None:
+    mismatches = [
+        f"{key}: cache={snapshot.get(key)!r} current={expected[key]!r}"
+        for key in expected
+        if snapshot.get(key) != expected[key]
+    ]
+    if mismatches:
+        mismatch_text = "\n".join(mismatches[:18])
+        raise RuntimeError(
+            f"Posterior-stats cache at {cache_path} does not match this run:\n"
+            f"{mismatch_text}\n"
+            "Use a matching cache path or pass --force_rebuild_posterior_stats_cache."
+        )
+
+
+def _load_posterior_stats_cache(
+    cache_path: str,
+    expected_snapshot: Dict[str, object],
+) -> Tuple[List[Dict], Dict[str, List[Tensor]], List[Tensor], int]:
+    payload = torch.load(cache_path, map_location="cpu")
+    if not isinstance(payload, dict) or payload.get("format") != _POSTERIOR_STATS_CACHE_FORMAT:
+        raise RuntimeError(
+            f"Unsupported posterior-stats cache format in {cache_path}. "
+            f"Expected format={_POSTERIOR_STATS_CACHE_FORMAT!r}."
+        )
+
+    snapshot = dict(payload.get("args_snapshot") or {})
+    _validate_cache_snapshot(
+        cache_path=cache_path,
+        snapshot=snapshot,
+        expected=expected_snapshot,
+    )
+
+    module_specs = payload.get("module_specs")
+    module_R_lists = payload.get("module_R_lists")
+    mu_global_list_raw = payload.get("mu_global_list_raw")
+    T = int(payload.get("T"))
+    if (
+        not isinstance(module_specs, list)
+        or not isinstance(module_R_lists, dict)
+        or not isinstance(mu_global_list_raw, list)
+    ):
+        raise RuntimeError(f"Posterior-stats cache at {cache_path} is missing required tensors.")
+    return module_specs, module_R_lists, mu_global_list_raw, T
+
 # =========================
 # Config Defaults
 # =========================
@@ -88,8 +238,10 @@ SEED = 0
 TRUST_REMOTE_CODE = False
 
 MAX_SEQ_LEN = 300
-EVAL_BSZ = 48
+EVAL_BSZ = 96
 KFAC_BSZ = 4
+SLICE_ORDER = "sorted"
+SLICE_ORDER_SEED = 0
 
 # KFAC / train-slice loaders remain conservative
 NUM_WORKERS = 0
@@ -101,30 +253,41 @@ EVAL_PREFETCH_FACTOR = 4
 N_KFAC = 8
 LR_THRESHOLD = 256
 MAX_KFAC_SAMPLES_PER_SLICE = -1
-KFAC_BACKEND = "hook"
-KFAC_TOKEN_MODE = "all_valid"
+KFAC_BACKEND = "asdl"
 
 MU_OBS_SCALE = 2
 MU_OBS_BATCHES = 32
 S_Q = 1.0
-Q_MODE = "constant"
+Q_MODE = "module_constant"
+MODULE_Q_CLIP_MIN = 0.5
+MODULE_Q_CLIP_MAX = 2.0
+GAP_Q_CLIP_MIN = 0.8
+GAP_Q_CLIP_MAX = 1.2
+MODULE_Q_SHRINK_EXPONENT = 0.05
+GAP_Q_SHRINK_EXPONENT = 0.05
 P1_VAR = 1.0
 
 SUBSPACE_DIM_PER_MODULE = 64
-MC_EVAL_SAMPLES = 32
+MC_EVAL_SAMPLES = 10
+POSTERIOR_EVAL_MODE = "lgssm_final"
+INDEPENDENT_SLICE_MC_SAMPLES_PER_SLICE = 3
 
-ADAPTIVE_Q_WARMSTART_VAR = 1.0
-ADAPTIVE_Q_EIG_FLOOR = 1e-8
-
-POSTERIOR_TAU = 1.0
-TEMP_BAYES = 1.0
-DISABLE_DROPOUT_DURING_KFAC_MU = False
-MU_OBS_USE_SELECTED_TOKEN_WEIGHT_GRADS = False
+POSTERIOR_TAU = 0.625
+TEMP_BAYES = 1.05
+DISABLE_DROPOUT_DURING_KFAC_MU = True
+TAU_MODE = "fixed"
+TAU_SEARCH_MAX = 2.0
+TAU_SEARCH_ITERS = 6
+TAU_ANCHOR_SIZE = 500
+TAU_ANCHOR_BSZ = EVAL_BSZ
+TAU_ANCHOR_N_SAMPLES = 32
+TAU_ACC_TOLERANCE = 0.01
+TAU_KL_TARGET_LOW = 0.05
+TAU_KL_TARGET_HIGH = 0.0525
 
 TOKENIZER_PADDING_SIDE = "left"
 BAYESIAN_PEFT_ADD_EOS = False
 IID_EVAL_SPLIT = "validation"
-BAYESIAN_PEFT_PERTURB_LM_HEAD = True
 HF_DATASETS_CACHE_DIR = os.path.join(os.path.dirname(__file__), ".hf_datasets")
 
 from common_eval_utils import (
@@ -307,28 +470,6 @@ def _resolve_bayes_module_names(factors: Dict[str, Tuple[Tensor, Tensor]]) -> Li
     return sorted([name for name in factors.keys() if "lora_A" in name])
 
 
-def _filter_bayes_module_names(
-    module_names: List[str],
-    *,
-    eval_protocol: str,
-    perturb_lm_head: bool,
-) -> List[str]:
-    if not _is_bayesian_peft_protocol(eval_protocol):
-        return module_names
-    if perturb_lm_head:
-        return module_names
-    filtered = [name for name in module_names if ".lm_head." not in name]
-    if not filtered:
-        raise RuntimeError(
-            "All Bayesian modules were filtered out after disabling lm_head posterior perturbation."
-        )
-    removed = len(module_names) - len(filtered)
-    print(
-        f"[Posterior] Keeping {len(filtered)} Bayesian modules after excluding "
-        f"{removed} lm_head module(s) from posterior perturbation."
-    )
-    return filtered
-
 def _ensure_slice_ids_for_seq(task: str, train_raw: Dataset) -> Dataset:
     if "slice_id" in train_raw.column_names:
         return train_raw
@@ -502,20 +643,12 @@ def forward_call_for_kfac_factory(
     choice_token_ids: Tensor,
     *,
     apply_choice_mask: bool,
-    kfac_token_mode: str,
 ):
     def _forward_call(model: nn.Module, batch: Dict[str, Tensor]) -> Tensor:
         device = next(model.parameters()).device
         input_ids = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
         num_choices = batch.get("num_choices")
-        hook_kfac._CURRENT_LAST_IDX = _left_padded_last_idx(input_ids)
-        if str(kfac_token_mode) == "all_valid":
-            hook_kfac._CURRENT_TOKEN_MODE = "all_valid"
-            hook_kfac._CURRENT_TOKEN_MASK = attention_mask.to(device=input_ids.device, dtype=torch.bool)
-        else:
-            hook_kfac._CURRENT_TOKEN_MODE = "last"
-            hook_kfac._CURRENT_TOKEN_MASK = None
 
         logits = compute_choice_logits(
             model=model,
@@ -529,28 +662,6 @@ def forward_call_for_kfac_factory(
         return logits
 
     return _forward_call
-
-
-def calculate_kronecker_factors_hook(
-    model: nn.Module,
-    forward_call,
-    loader: DataLoader,
-    n_kfac: int | None = None,
-    lr_threshold: int = 512,
-    target_module_keywords: list[str] | None = None,
-    exclude_bias: bool = False,
-    use_tqdm: bool = False,
-) -> Dict[str, Tuple[Tensor, Tensor]]:
-    return hook_kfac.calculate_kronecker_factors(
-        model=model,
-        forward_call=forward_call,
-        loader=loader,
-        n_kfac=n_kfac,
-        lr_threshold=lr_threshold,
-        target_module_keywords=(target_module_keywords or [""]),
-        exclude_bias=exclude_bias,
-        use_tqdm=use_tqdm,
-    )
 
 
 class _AsdlForwardWrapper(nn.Module):
@@ -846,107 +957,6 @@ def _get_param_weight(model: nn.Module, module_path: str) -> nn.Parameter:
     return w
 
 
-def _select_token_rows(tensor: Tensor) -> Tensor:
-    if tensor.dim() == 3:
-        bsz, seq_len, width = tensor.shape
-        if str(getattr(hook_kfac, "_CURRENT_TOKEN_MODE", "last")) == "all_valid":
-            token_mask = getattr(hook_kfac, "_CURRENT_TOKEN_MASK", None)
-            if token_mask is None:
-                return tensor.reshape(bsz * seq_len, width)
-            token_mask = token_mask.to(device=tensor.device, dtype=torch.bool)
-            if token_mask.shape != (bsz, seq_len):
-                raise RuntimeError(
-                    f"Token mask shape mismatch: expected {(bsz, seq_len)}, got {tuple(token_mask.shape)}"
-                )
-            rows = tensor[token_mask]
-            return rows if rows.numel() > 0 else tensor[:, -1, :]
-
-        idx = getattr(hook_kfac, "_CURRENT_LAST_IDX", None)
-        if idx is None:
-            return tensor[:, -1, :]
-        idx = idx.to(device=tensor.device, dtype=torch.long).clamp(min=0, max=seq_len - 1)
-        return tensor[torch.arange(bsz, device=tensor.device), idx, :]
-
-    if tensor.dim() == 2:
-        return tensor
-
-    raise RuntimeError(f"Unexpected tensor dim for selected-token rows: {tuple(tensor.shape)}")
-
-
-@dataclass
-class _ModuleGradState:
-    weight_shape: torch.Size
-    inputs: List[Tensor]
-    grad_outputs: List[Tensor]
-
-
-class _SelectedTokenWeightGradCapture:
-    def __init__(self, model: nn.Module, module_names: List[str]):
-        self._states: Dict[str, _ModuleGradState] = {}
-        self._handles = []
-
-        for module_name in module_names:
-            module = model.get_submodule(module_name)
-            if not isinstance(module, nn.Linear):
-                raise RuntimeError(
-                    f"Selected-token local grad capture expects nn.Linear, got {type(module)} for {module_name}"
-                )
-            self._states[module_name] = _ModuleGradState(
-                weight_shape=module.weight.shape,
-                inputs=[],
-                grad_outputs=[],
-            )
-            self._handles.append(module.register_forward_pre_hook(self._make_input_hook(module_name)))
-            self._handles.append(module.register_full_backward_hook(self._make_grad_hook(module_name)))
-
-    def _make_input_hook(self, module_name: str):
-        def _hook(_module: nn.Module, pos_args: tuple[Tensor, ...]) -> None:
-            if not pos_args:
-                raise RuntimeError(f"Missing forward inputs for module {module_name}")
-            self._states[module_name].inputs.append(_select_token_rows(pos_args[0].detach()))
-
-        return _hook
-
-    def _make_grad_hook(self, module_name: str):
-        def _hook(_module: nn.Module, _grad_input, grad_output: tuple[Tensor, ...]) -> None:
-            if not grad_output:
-                raise RuntimeError(f"Missing backward outputs for module {module_name}")
-            self._states[module_name].grad_outputs.append(_select_token_rows(grad_output[0].detach()))
-
-        return _hook
-
-    def take_weight_grads(
-        self,
-        *,
-        device: torch.device,
-        dtype: torch.dtype,
-    ) -> Dict[str, Tensor]:
-        weight_grads: Dict[str, Tensor] = {}
-        for module_name, state in self._states.items():
-            grad_weight = torch.zeros(state.weight_shape, device=device, dtype=dtype)
-            if len(state.inputs) != len(state.grad_outputs):
-                raise RuntimeError(
-                    f"Hook event mismatch for {module_name}: "
-                    f"{len(state.inputs)} inputs vs {len(state.grad_outputs)} grad outputs"
-                )
-            for a_rows, s_rows in zip(state.inputs, state.grad_outputs):
-                if a_rows.shape[0] != s_rows.shape[0]:
-                    raise RuntimeError(
-                        f"Selected-row mismatch for {module_name}: "
-                        f"inputs={tuple(a_rows.shape)} grad_outputs={tuple(s_rows.shape)}"
-                    )
-                a_rows = a_rows.to(device=device, dtype=dtype)
-                s_rows = s_rows.to(device=device, dtype=dtype)
-                grad_weight.addmm_(s_rows.T, a_rows, beta=1.0, alpha=1.0)
-            state.inputs.clear()
-            state.grad_outputs.clear()
-            weight_grads[module_name] = grad_weight
-        return weight_grads
-
-    def remove(self) -> None:
-        while self._handles:
-            self._handles.pop().remove()
-
 @torch.no_grad()
 def materialize_scalar_Q_list(
     var_list: Sequence[float],
@@ -956,194 +966,6 @@ def materialize_scalar_Q_list(
 ) -> List[Tensor]:
     I = torch.eye(L, device=device, dtype=dtype)
     return [float(var) * I for var in var_list]
-
-
-def _adaptive_q_eps(dtype: torch.dtype) -> float:
-    return 1e-8 if dtype == torch.float64 else 1e-6
-
-
-def _symmetrize(M: Tensor) -> Tensor:
-    return 0.5 * (M + M.T)
-
-
-def _relative_floor_psd_eigs(evals: Tensor, eps_rel: float) -> Tensor:
-    evals = evals.clamp_min(0.0)
-    if eps_rel <= 0.0:
-        return evals
-    scale = torch.amax(evals)
-    return evals.clamp_min(scale * float(eps_rel))
-
-
-@torch.no_grad()
-def _build_module_q_basis(
-    H_x_list: List[Tensor],
-    *,
-    eps_rel: float,
-    dtype: torch.dtype,
-) -> Tuple[Tensor, Tensor]:
-    if len(H_x_list) == 0:
-        raise ValueError("H_x_list must be non-empty")
-    H_mean = torch.zeros_like(H_x_list[0], dtype=dtype)
-    for H_x in H_x_list:
-        H_mean.add_(H_x.to(dtype=dtype))
-    H_mean = _symmetrize(H_mean / float(len(H_x_list)))
-    nu_bar, U_q = torch.linalg.eigh(H_mean)
-    nu_bar = _relative_floor_psd_eigs(nu_bar, eps_rel)
-    return U_q.to(dtype=dtype), nu_bar.to(dtype=dtype)
-
-
-@torch.no_grad()
-def _estimate_module_q_diag(
-    x_smooth: List[Tensor],
-    P_smooth: List[Tensor],
-    lag_covariances: List[Tensor],
-    U_q: Tensor,
-    nu_bar: Tensor,
-    *,
-    eps: float,
-) -> Tuple[Tensor, Dict[str, float]]:
-    T = len(x_smooth)
-    L = x_smooth[0].numel()
-    dtype = x_smooth[0].dtype
-    device = x_smooth[0].device
-
-    nu_safe = nu_bar.to(device=device, dtype=dtype).clamp_min(float(eps))
-
-    if T <= 1:
-        q_prior = torch.ones(L, device=device, dtype=dtype)
-        return q_prior, {
-            "alpha_mix": 0.0,
-            "q_em_min": 1.0,
-            "q_em_mean": 1.0,
-            "q_em_max": 1.0,
-            "q_prior_min": 1.0,
-            "q_prior_mean": 1.0,
-            "q_prior_max": 1.0,
-            "q_diag_min": 1.0,
-            "q_diag_mean": 1.0,
-            "q_diag_max": 1.0,
-            "r_eff": float(L),
-        }
-
-    U_q_t = U_q.to(device=device, dtype=dtype)
-
-    mu_basis = [U_q_t.T @ x_t.to(device=device, dtype=dtype) for x_t in x_smooth]
-    diag_basis = []
-    cross_diag = [torch.zeros(L, device=device, dtype=dtype)]
-
-    for P_t in P_smooth:
-        P_basis = U_q_t.T @ P_t.to(device=device, dtype=dtype) @ U_q_t
-        diag_basis.append(torch.diagonal(_symmetrize(P_basis)))
-    for t in range(1, T):
-        C_basis = U_q_t.T @ lag_covariances[t].to(device=device, dtype=dtype) @ U_q_t
-        cross_diag.append(torch.diagonal(C_basis))
-
-    q_em_terms: List[Tensor] = []
-    for t in range(1, T):
-        delta_mu = mu_basis[t] - mu_basis[t - 1]
-        term_t = (
-            delta_mu.square()
-            + diag_basis[t]
-            + diag_basis[t - 1]
-            - 2.0 * cross_diag[t]
-        )
-        q_em_terms.append(term_t)
-
-    q_em = torch.stack(q_em_terms, dim=0).mean(dim=0).clamp_min(float(eps))
-    kappa = torch.median((nu_safe * q_em).clamp_min(float(eps)))
-    q_prior = (kappa / nu_safe).clamp_min(float(eps))
-
-    r_eff = (nu_safe.sum().square() / nu_safe.square().sum().clamp_min(float(eps))).clamp_min(1.0)
-    alpha_mix = float((T - 1) / ((T - 1) + float(r_eff.item())))
-    q_diag = (alpha_mix * q_em + (1.0 - alpha_mix) * q_prior).clamp_min(float(eps))
-
-    def _summ(x: Tensor, prefix: str) -> Dict[str, float]:
-        return {
-            f"{prefix}_min": float(x.min().item()),
-            f"{prefix}_mean": float(x.mean().item()),
-            f"{prefix}_max": float(x.max().item()),
-        }
-
-    stats: Dict[str, float] = {
-        "alpha_mix": float(alpha_mix),
-        "r_eff": float(r_eff.item()),
-    }
-    stats.update(_summ(q_em, "q_em"))
-    stats.update(_summ(q_prior, "q_prior"))
-    stats.update(_summ(q_diag, "q_diag"))
-    return q_diag, stats
-
-
-@torch.no_grad()
-def materialize_constant_module_Q_list(
-    U_q: Tensor,
-    q_diag: Tensor,
-    num_steps: int,
-    *,
-    s_q: float,
-    device: torch.device,
-    dtype: torch.dtype,
-) -> List[Tensor]:
-    U_t = U_q.to(device=device, dtype=dtype)
-    q_t = q_diag.to(device=device, dtype=dtype)
-    base_Q = (U_t * (float(s_q) * q_t).unsqueeze(0)) @ U_t.T
-    base_Q = _symmetrize(base_Q)
-    return [base_Q.clone() for _ in range(num_steps)]
-
-def estimate_mu_global_list_from_slice_grads(
-    model: nn.Module,
-    slice_loaders: List[DataLoader],
-    forward_call_for_kfac,
-    module_names: List[str],
-    module_subspace_info: Dict[str, Dict[str, Tensor]],
-    module_R_lists: Dict[str, List[Tensor]],
-    device: torch.device,
-    n_batches_per_slice: int = 1,
-    dtype: torch.dtype = torch.float64,
-) -> List[Tensor]:
-    model.train()
-    mu_global_list: List[Tensor] = []
-
-    for t, loader in enumerate(slice_loaders):
-        g_x_parts = [
-            torch.zeros(int(module_subspace_info[name]["U_lora"].shape[1]), device=device, dtype=dtype)
-            for name in module_names
-        ]
-        n_seen = 0
-
-        for batch in loader:
-            if n_seen >= n_batches_per_slice:
-                break
-
-            model.zero_grad(set_to_none=True)
-            loss = F.cross_entropy(
-                forward_call_for_kfac(model, batch),
-                batch["labels"].to(device=device, non_blocking=True),
-            )
-            loss.backward()
-
-            for mi, name in enumerate(module_names):
-                w = _get_param_weight(model, name)
-                g_x_parts[mi] += (
-                    module_subspace_info[name]["U_lora"].to(device=device, dtype=dtype).T
-                    @ w.grad.detach().to(dtype=dtype).reshape(-1)
-                )
-            n_seen += 1
-
-        if n_seen == 0:
-            raise RuntimeError(f"[mu-obs] slice {t} loader produced no batches")
-
-        mu_parts: List[Tensor] = []
-        for mi, name in enumerate(module_names):
-            g_x_avg = g_x_parts[mi] / float(n_seen)
-            mu_part = solve_xhat_from_grad(
-                module_R_lists[name][t].to(device=device, dtype=dtype),
-                g_x_avg,
-            )
-            mu_parts.append(mu_part)
-        mu_global_list.append(torch.cat(mu_parts, dim=0).cpu())
-
-    return mu_global_list
 
 
 def estimate_mu_global_list_from_slice_grads_asdl(
@@ -1172,13 +994,16 @@ def estimate_mu_global_list_from_slice_grads_asdl(
 
     with _temporarily_select_lora_a_weights(model):
         asdl_module_names = list(_iter_weight_block_module_names(wrapper))
-        if set(asdl_module_names) != set(module_names):
-            missing = sorted(set(module_names) - set(asdl_module_names))
+        missing = sorted(set(module_names) - set(asdl_module_names))
+        if missing:
             extra = sorted(set(asdl_module_names) - set(module_names))
             raise RuntimeError(
                 "ASDL gx module-name mismatch. "
                 f"missing={missing[:5]} extra={extra[:5]}"
             )
+        extra = sorted(set(asdl_module_names) - set(module_names))
+        if extra:
+            print(f"[mu-obs-asdl] ignoring {len(extra)} extra ASDL module(s): {extra[:5]}")
 
         block_slices: Dict[str, slice] = {}
         offset = 0
@@ -1243,66 +1068,6 @@ def estimate_mu_global_list_from_slice_grads_asdl(
     return mu_global_list
 
 
-def estimate_mu_global_list_from_slice_local_weight_grads(
-    model: nn.Module,
-    slice_loaders: List[DataLoader],
-    forward_call_for_kfac,
-    module_names: List[str],
-    module_subspace_info: Dict[str, Dict[str, Tensor]],
-    module_R_lists: Dict[str, List[Tensor]],
-    device: torch.device,
-    n_batches_per_slice: int = 1,
-    dtype: torch.dtype = torch.float64,
-) -> List[Tensor]:
-    model.train()
-    mu_global_list: List[Tensor] = []
-    grad_capture = _SelectedTokenWeightGradCapture(model, module_names)
-
-    try:
-        for t, loader in enumerate(slice_loaders):
-            g_x_parts = [
-                torch.zeros(int(module_subspace_info[name]["U_lora"].shape[1]), device=device, dtype=dtype)
-                for name in module_names
-            ]
-            n_seen = 0
-
-            for batch in loader:
-                if n_seen >= n_batches_per_slice:
-                    break
-
-                model.zero_grad(set_to_none=True)
-                loss = F.cross_entropy(
-                    forward_call_for_kfac(model, batch),
-                    batch["labels"].to(device=device, non_blocking=True),
-                )
-                loss.backward()
-
-                local_weight_grads = grad_capture.take_weight_grads(device=device, dtype=dtype)
-                for mi, name in enumerate(module_names):
-                    g_x_parts[mi] += (
-                        module_subspace_info[name]["U_lora"].to(device=device, dtype=dtype).T
-                        @ local_weight_grads[name].reshape(-1)
-                    )
-                n_seen += 1
-
-            if n_seen == 0:
-                raise RuntimeError(f"[mu-obs-local] slice {t} loader produced no batches")
-
-            mu_parts: List[Tensor] = []
-            for mi, name in enumerate(module_names):
-                g_x_avg = g_x_parts[mi] / float(n_seen)
-                mu_part = solve_xhat_from_grad(
-                    module_R_lists[name][t].to(device=device, dtype=dtype),
-                    g_x_avg,
-                )
-                mu_parts.append(mu_part)
-            mu_global_list.append(torch.cat(mu_parts, dim=0).cpu())
-
-        return mu_global_list
-    finally:
-        grad_capture.remove()
-
-
 def _move_subspace_info(
     subspace_info: Dict[str, Tensor],
     device: torch.device,
@@ -1319,36 +1084,188 @@ def _move_subspace_info(
             moved[key] = value
     return moved
 
-def _report_module_constant_q_results(module_stats: Dict[str, Dict[str, float]], s_q: float) -> None:
-    if not module_stats:
-        print("[Module Q] No module statistics available.")
-        return
-
-    def _summ(key: str) -> str:
-        vals = [float(stats[key]) for stats in module_stats.values()]
-        return f"min={min(vals):.6f} mean={sum(vals)/len(vals):.6f} max={max(vals):.6f}"
-
-    print("\n=== Module-Constant Q Report ===")
-    print(f"[Module Q] exposed scale s_Q={float(s_q):.6f}")
-    print(
-        f"[Module Q Summary] "
-        f"alpha({_summ('alpha_mix')}) | "
-        f"qdiag({_summ('q_diag_mean')})"
-    )
-    print("[Module Q Per Module]")
-    for name, stats in module_stats.items():
-        print(
-            f"  {name}: "
-            f"alpha={stats['alpha_mix']:.6f} "
-            f"r_eff={stats['r_eff']:.3f} "
-            f"nu=[{stats['nu_min']:.6f}, {stats['nu_mean']:.6f}, {stats['nu_max']:.6f}] "
-            f"qdiag=[{stats['q_diag_min']:.6f}, {stats['q_diag_mean']:.6f}, {stats['q_diag_max']:.6f}]"
-        )
-
-
 def _report_scalar_constant_q_results(s_q: float) -> None:
     print("\n=== Scalar-Constant Q Report ===")
     print(f"[Constant Q] mode=constant  shared Q_t = s_Q * I with s_Q={float(s_q):.6f}")
+
+
+def _normalize_and_clip_scales(
+    values: Sequence[float],
+    *,
+    clip_min: float,
+    clip_max: float,
+    shrink_exponent: float = 1.0,
+) -> List[float]:
+    values = [float(v) for v in values]
+    positive = [v for v in values if math.isfinite(v) and v > 0.0]
+    if not positive:
+        return [1.0 for _ in values]
+    denom = float(torch.tensor(positive, dtype=torch.float64).median().item())
+    if not math.isfinite(denom) or denom <= 0.0:
+        denom = sum(positive) / max(len(positive), 1)
+    if not math.isfinite(denom) or denom <= 0.0:
+        return [1.0 for _ in values]
+    beta = float(min(max(float(shrink_exponent), 0.0), 1.0))
+    scales = []
+    for v in values:
+        if math.isfinite(v) and v > 0.0:
+            ratio = max(v / denom, 1e-12)
+            scale = math.exp(beta * math.log(ratio))
+        else:
+            scale = 1.0
+        scales.append(scale)
+    return [float(min(max(s, clip_min), clip_max)) for s in scales]
+
+
+def _median_positive_or_default(values: Tensor, default: float = 0.0) -> float:
+    values = values.detach().reshape(-1).to(dtype=torch.float64)
+    values = values[torch.isfinite(values) & (values > 0.0)]
+    if int(values.numel()) == 0:
+        return float(default)
+    return float(values.median().item())
+
+
+def _build_module_constant_q_scales(
+    module_specs: List[Dict],
+    module_R_lists: Dict[str, List[Tensor]],
+    mu_global_list_raw: List[Tensor],
+    *,
+    clip_min: float,
+    clip_max: float,
+    shrink_exponent: float,
+) -> Dict[str, float]:
+    if len(mu_global_list_raw) < 2:
+        return {str(spec["name"]): 1.0 for spec in module_specs}
+
+    raw_vals: List[float] = []
+    names: List[str] = []
+    for spec in module_specs:
+        name = str(spec["name"])
+        offset = int(spec["offset"])
+        Lm = int(spec["L"])
+        R_list = module_R_lists.get(name, [])
+        if not R_list:
+            raw_vals.append(1.0)
+            names.append(name)
+            continue
+
+        curvature_diag = torch.zeros(Lm, dtype=torch.float64)
+        n_curv = 0
+        for R_t in R_list:
+            R_cpu = R_t.detach().to(device=curvature_diag.device, dtype=torch.float64)
+            if tuple(R_cpu.shape) != (Lm, Lm):
+                raise ValueError(
+                    f"R_list for module {name} has shape {tuple(R_cpu.shape)}, expected {(Lm, Lm)}"
+                )
+            curvature_diag.add_(R_cpu.pow(2).sum(dim=0))
+            n_curv += 1
+        curvature_diag.div_(max(n_curv, 1)).clamp_min_(0.0)
+
+        gap_vals: List[float] = []
+        for t in range(1, len(mu_global_list_raw)):
+            delta = (
+                mu_global_list_raw[t][offset : offset + Lm].to(dtype=torch.float64)
+                - mu_global_list_raw[t - 1][offset : offset + Lm].to(dtype=torch.float64)
+            )
+            coord_energy = delta.pow(2) * curvature_diag
+            gap_vals.append(_median_positive_or_default(coord_energy, default=0.0))
+
+        raw_vals.append(
+            _median_positive_or_default(
+                torch.tensor(gap_vals, dtype=torch.float64),
+                default=1.0,
+            )
+        )
+        names.append(name)
+
+    scales = _normalize_and_clip_scales(
+        raw_vals,
+        clip_min=clip_min,
+        clip_max=clip_max,
+        shrink_exponent=shrink_exponent,
+    )
+    return {name: scale for name, scale in zip(names, scales)}
+
+
+def _build_gap_q_scales(
+    mu_global_list_raw: List[Tensor],
+    *,
+    clip_min: float,
+    clip_max: float,
+    shrink_exponent: float,
+) -> List[float]:
+    T = len(mu_global_list_raw)
+    if T <= 1:
+        return [1.0 for _ in range(T)]
+
+    raw_vals = [1.0]
+    for t in range(1, T):
+        delta = mu_global_list_raw[t] - mu_global_list_raw[t - 1]
+        raw_vals.append(float(delta.pow(2).mean().item()))
+    return _normalize_and_clip_scales(
+        raw_vals,
+        clip_min=clip_min,
+        clip_max=clip_max,
+        shrink_exponent=shrink_exponent,
+    )
+
+
+def _report_module_constant_q_results(
+    module_scales: Dict[str, float],
+    *,
+    s_q: float,
+    shrink_exponent: float,
+) -> None:
+    if not module_scales:
+        print("[Module Q] No module scales available.")
+        return
+
+    vals = [float(v) for v in module_scales.values()]
+    print("\n=== Module-Constant Q Report ===")
+    print(
+        f"[Module Q] mode=module_constant  estimator=curvature_normalized_mu_drift_prior  "
+        f"exposed scale s_Q={float(s_q):.6f}  "
+        f"beta={float(min(max(float(shrink_exponent), 0.0), 1.0)):.3f}  "
+        "drift_m=median_t median_l ((delta_mu_l)^2 diag(Hbar_m)_l)  Q_t^(m)=s_Q*q_m*I"
+    )
+    print(
+        f"[Module Q Summary] scale(min={min(vals):.6f} mean={sum(vals)/len(vals):.6f} max={max(vals):.6f})"
+    )
+    print("[Module Q Per Module]")
+    for name, scale in module_scales.items():
+        print(f"  {name}: q_scale={float(scale):.6f} q_diag={float(s_q) * float(scale):.6f}")
+
+
+def _report_module_gap_q_results(
+    module_scales: Dict[str, float],
+    gap_scales: List[float],
+    *,
+    s_q: float,
+    module_shrink_exponent: float,
+    gap_shrink_exponent: float,
+) -> None:
+    print("\n=== Module-Gap Q Report ===")
+    print(
+        f"[Module Q] mode=module_gap  module_estimator=curvature_normalized_mu_drift_prior  "
+        f"exposed scale s_Q={float(s_q):.6f}  "
+        f"module_beta={float(min(max(float(module_shrink_exponent), 0.0), 1.0)):.3f}  "
+        f"gap_beta={float(min(max(float(gap_shrink_exponent), 0.0), 1.0)):.3f}  "
+        "Q_t^(m)=s_Q*rho_t*q_m*I"
+    )
+    if module_scales:
+        vals = [float(v) for v in module_scales.values()]
+        print(
+            f"[Module Q Summary] module_scale(min={min(vals):.6f} mean={sum(vals)/len(vals):.6f} max={max(vals):.6f})"
+        )
+    if gap_scales:
+        print(
+            f"[Gap Q Summary] gap_scale(min={min(gap_scales):.6f} "
+            f"mean={sum(gap_scales)/len(gap_scales):.6f} max={max(gap_scales):.6f})"
+        )
+    print("[Gap Q Per Slice]")
+    for t, scale in enumerate(gap_scales):
+        print(f"  t={t}: gap_scale={float(scale):.6f}")
+
 
 # =========================
 # Fast Bayesian eval
@@ -1412,6 +1329,212 @@ def build_loraA_cache(model: nn.Module, module_specs: List[Dict], device: torch.
     return caches
 
 
+def _sample_posterior_from_stats(
+    *,
+    args: argparse.Namespace,
+    module_specs: List[Dict],
+    module_R_lists: Dict[str, List[Tensor]],
+    mu_global_list_raw: List[Tensor],
+    T: int,
+    device: torch.device,
+    cpu_device: torch.device,
+) -> Tensor:
+    del device
+    sample_seed = int(args.seed)
+    torch.manual_seed(sample_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(sample_seed)
+
+    mu_global_list = [float(args.mu_obs_scale) * mu_t for mu_t in mu_global_list_raw]
+    use_module_constant_q = str(args.q_mode) in {"module_constant", "module_gap"}
+    use_module_gap_q = str(args.q_mode) == "module_gap"
+    gap_q_scales = (
+        _build_gap_q_scales(
+            mu_global_list_raw,
+            clip_min=float(args.gap_q_clip_min),
+            clip_max=float(args.gap_q_clip_max),
+            shrink_exponent=float(args.gap_q_shrink_exponent),
+        )
+        if use_module_gap_q
+        else [1.0 for _ in range(T)]
+    )
+    module_q_scales = (
+        _build_module_constant_q_scales(
+            module_specs,
+            module_R_lists,
+            mu_global_list_raw,
+            clip_min=float(args.module_q_clip_min),
+            clip_max=float(args.module_q_clip_max),
+            shrink_exponent=float(args.module_q_shrink_exponent),
+        )
+        if use_module_constant_q
+        else {}
+    )
+
+    print(f"\n=== Kalman Filter Only (module-wise) ===")
+    print(f"[Kalman] modules={len(module_specs)} L_total={sum(int(spec['L']) for spec in module_specs)}")
+
+    if args.forecast_horizon > 0:
+        print(
+            f"\nDirectly sampling forecast posterior (t=T+{args.forecast_horizon} | T): "
+            f"S={args.mc_eval_samples}"
+        )
+    else:
+        print(f"\nDirectly sampling final posterior (t=T): S={args.mc_eval_samples}")
+
+    x_sample_parts: List[Tensor] = []
+    for spec in module_specs:
+        name = spec["name"]
+        offset = int(spec["offset"])
+        Lm = int(spec["L"])
+        mu_module_list = [
+            mu_t[offset : offset + Lm].to(device=cpu_device, dtype=torch.float64)
+            for mu_t in mu_global_list
+        ]
+        H_obs_list, y_list = prepare_lgssm_observations(
+            module_R_lists[name],
+            mu_list=mu_module_list,
+        )
+        m1 = torch.zeros(Lm, device=cpu_device, dtype=torch.float64)
+        P1 = float(args.p1_var) * torch.eye(Lm, device=cpu_device, dtype=torch.float64)
+        if use_module_constant_q:
+            module_scale = float(module_q_scales.get(name, 1.0))
+            q_var_list = [float(args.s_q) * module_scale * gap_scale for gap_scale in gap_q_scales]
+        else:
+            q_var_list = [float(args.s_q) for _ in range(T)]
+        Q_list = materialize_scalar_Q_list(
+            q_var_list,
+            L=Lm,
+            device=cpu_device,
+            dtype=torch.float64,
+        )
+
+        x_filt_m, P_filt_m, _, _ = kalman_filter(
+            H_list=H_obs_list,
+            y_list=y_list,
+            Q_list=Q_list,
+            m1=m1,
+            P1=P1,
+        )
+        mu_T_m, cov_T_m = _forecast_from_final_posterior(
+            x_T=x_filt_m[-1],
+            P_T=P_filt_m[-1],
+            Q_list=Q_list,
+            horizon=int(args.forecast_horizon),
+        )
+        cov_T_stable = cov_T_m + torch.eye(
+            cov_T_m.shape[0],
+            device=cov_T_m.device,
+            dtype=cov_T_m.dtype,
+        ) * 1e-6
+
+        dist_m = torch.distributions.MultivariateNormal(
+            mu_T_m,
+            covariance_matrix=cov_T_stable,
+        )
+        x_sample_parts.append(dist_m.sample((int(args.mc_eval_samples),)))
+
+        del (
+            H_obs_list,
+            y_list,
+            Q_list,
+            x_filt_m,
+            P_filt_m,
+            mu_T_m,
+            cov_T_m,
+            cov_T_stable,
+            dist_m,
+        )
+        gc.collect()
+
+    if use_module_gap_q:
+        _report_module_gap_q_results(
+            module_q_scales,
+            gap_q_scales,
+            s_q=float(args.s_q),
+            module_shrink_exponent=float(args.module_q_shrink_exponent),
+            gap_shrink_exponent=float(args.gap_q_shrink_exponent),
+        )
+    elif use_module_constant_q:
+        _report_module_constant_q_results(
+            module_q_scales,
+            s_q=float(args.s_q),
+            shrink_exponent=float(args.module_q_shrink_exponent),
+        )
+    else:
+        _report_scalar_constant_q_results(args.s_q)
+    del mu_global_list
+    return torch.cat(x_sample_parts, dim=1).to(dtype=torch.float32)
+
+
+def _sample_independent_slice_ensemble_from_stats(
+    *,
+    args: argparse.Namespace,
+    module_specs: List[Dict],
+    module_R_lists: Dict[str, List[Tensor]],
+    mu_global_list_raw: List[Tensor],
+    T: int,
+    cpu_device: torch.device,
+) -> Tensor:
+    sample_seed = int(args.seed)
+    torch.manual_seed(sample_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(sample_seed)
+
+    samples_per_slice = max(int(args.independent_slice_mc_samples_per_slice), 1)
+    total_samples = int(T) * samples_per_slice
+    mu_global_list = [float(args.mu_obs_scale) * mu_t for mu_t in mu_global_list_raw]
+
+    print("\n=== Independent Slice Ensemble Posterior ===", flush=True)
+    print(
+        f"[Independent Ensemble] modules={len(module_specs)} T={int(T)} "
+        f"samples_per_slice={samples_per_slice} total_samples={total_samples} "
+        f"prior=P1={float(args.p1_var):.6g} no_Kalman no_Q",
+        flush=True,
+    )
+
+    x_sample_parts: List[Tensor] = []
+    for spec in module_specs:
+        name = spec["name"]
+        offset = int(spec["offset"])
+        Lm = int(spec["L"])
+        mu_module_list = [
+            mu_t[offset : offset + Lm].to(device=cpu_device, dtype=torch.float64)
+            for mu_t in mu_global_list
+        ]
+        H_obs_list, y_list = prepare_lgssm_observations(
+            module_R_lists[name],
+            mu_list=mu_module_list,
+        )
+
+        eye = torch.eye(Lm, device=cpu_device, dtype=torch.float64)
+        prior_precision = (1.0 / max(float(args.p1_var), 1e-12)) * eye
+        module_samples: List[Tensor] = []
+        for t in range(int(T)):
+            R_t = H_obs_list[t].to(device=cpu_device, dtype=torch.float64)
+            y_t = y_list[t].to(device=cpu_device, dtype=torch.float64)
+            precision = prior_precision + R_t.T @ R_t
+            precision = 0.5 * (precision + precision.T) + 1e-6 * eye
+            rhs = R_t.T @ y_t
+            chol = torch.linalg.cholesky(precision)
+            mean_t = torch.cholesky_solve(rhs.unsqueeze(-1), chol).squeeze(-1)
+            cov_t = torch.cholesky_inverse(chol)
+            cov_t = 0.5 * (cov_t + cov_t.T) + 1e-6 * eye
+            dist_t = torch.distributions.MultivariateNormal(
+                mean_t,
+                covariance_matrix=cov_t,
+            )
+            module_samples.append(dist_t.sample((samples_per_slice,)))
+            del R_t, y_t, precision, rhs, chol, mean_t, cov_t, dist_t
+
+        x_sample_parts.append(torch.cat(module_samples, dim=0))
+        del H_obs_list, y_list, module_samples
+        gc.collect()
+
+    del mu_global_list
+    return torch.cat(x_sample_parts, dim=1).to(dtype=torch.float32)
+
+
 def _set_inference_fast(model: nn.Module):
     if hasattr(model, "base_model") and hasattr(model.base_model, "gradient_checkpointing_disable"):
         model.base_model.gradient_checkpointing_disable()
@@ -1449,7 +1572,7 @@ def eval_bayes_fast_restricted_4way_probmean(
     model.eval()
     _set_inference_fast(model)
 
-    scale = float(posterior_scale_tau) / math.sqrt(max(len(lora_cache), 1))
+    scale = float(posterior_scale_tau)
     S = min(int(max_mc_samples), int(x_samples_T.shape[0]))
     if S <= 0:
         raise ValueError("max_mc_samples must be positive.")
@@ -1563,6 +1686,269 @@ def eval_bayes_fast_restricted_4way_probmean(
     return metrics
 
 
+def _subset_dataset(ds: Dataset, subset_size: int, seed: int) -> Dataset:
+    if int(subset_size) <= 0 or int(subset_size) >= len(ds):
+        return ds
+    return ds.shuffle(seed=int(seed)).select(range(int(subset_size)))
+
+
+def _tau_accuracy_ok(
+    metrics: Dict[str, float],
+    *,
+    acc_floor: float,
+) -> bool:
+    return float(metrics["acc_bayes"]) >= float(acc_floor)
+
+
+def _tau_kl_in_window(metrics: Dict[str, float], *, kl_low: float, kl_high: float) -> bool:
+    kl = float(metrics["kl_map_to_bayes"])
+    return float(kl_low) <= kl <= float(kl_high)
+
+
+def _tau_kl_window_distance(metrics: Dict[str, float], *, kl_low: float, kl_high: float) -> float:
+    kl = float(metrics["kl_map_to_bayes"])
+    if kl < float(kl_low):
+        return float(kl_low) - kl
+    if kl > float(kl_high):
+        return kl - float(kl_high)
+    return 0.0
+
+
+@torch.inference_mode()
+def fit_seq_lora_tau_anchor_kl_direct(
+    model: nn.Module,
+    anchor_loader: DataLoader,
+    device: torch.device,
+    amp_dtype: torch.dtype,
+    num_classes: int,
+    choice_token_ids: Tensor,
+    lora_cache: List[_LoraACache],
+    x_samples_T: Tensor,
+    tau_max: float,
+    search_iters: int,
+    anchor_n_samples: int,
+    temp_bayes: float,
+    mc_eval_chunk: int,
+    apply_choice_mask: bool,
+    acc_tolerance: float,
+    kl_target_low: float,
+    kl_target_high: float,
+) -> Dict[str, float]:
+    del search_iters
+    tau_max_arg = float(tau_max)
+    if tau_max_arg <= 0.0:
+        raise ValueError(f"tau_search_max must be positive, got {tau_max_arg}")
+    tau_max = tau_max_arg
+    kl_target_low = float(kl_target_low)
+    kl_target_high = float(kl_target_high)
+    if not (0.0 <= kl_target_low <= kl_target_high):
+        raise ValueError(
+            f"Expected 0 <= tau_kl_target_low <= tau_kl_target_high, "
+            f"got {kl_target_low}, {kl_target_high}"
+        )
+
+    def _eval_tau(tau: float, *, n_samples: int, desc: str) -> Dict[str, float]:
+        return eval_bayes_fast_restricted_4way_probmean(
+            model=model,
+            loader=anchor_loader,
+            device=device,
+            amp_dtype=amp_dtype,
+            num_classes=num_classes,
+            choice_token_ids=choice_token_ids,
+            lora_cache=lora_cache,
+            x_samples_T=x_samples_T,
+            posterior_scale_tau=float(tau),
+            temp_bayes=temp_bayes,
+            max_mc_samples=max(int(n_samples), 1),
+            mc_eval_chunk=mc_eval_chunk,
+            progress_desc=desc,
+            apply_choice_mask=apply_choice_mask,
+        )
+
+    baseline = _eval_tau(0.0, n_samples=1, desc="TAU-AUTO ref tau=0")
+    acc0 = float(baseline["acc_bayes"])
+    nll0 = float(baseline["nll_bayes"])
+    acc_floor = acc0 - float(acc_tolerance)
+    records: List[Tuple[float, Dict[str, float], str]] = [(0.0, baseline, "baseline")]
+    kl_target = kl_target_low
+    probe_tau = min(0.5, tau_max)
+    eps = 1e-12
+
+    print(
+        "\n=== Auto-selecting posterior_tau by direct anchor KL estimate ===\n"
+        f"[Tau auto] baseline tau=0.000000 "
+        f"Acc0={acc0*100:.2f}% NLL0={nll0:.6f} KL0={baseline['kl_map_to_bayes']:.6f}\n"
+        f"[Tau auto] target: "
+        f"{kl_target_low:.6f} <= KL_tau <= {kl_target_high:.6f} "
+        f"(direct_target={kl_target:.6f}, acc floor logged only: {acc_floor*100:.2f}%) "
+        f"using KL(tau) ~= C * tau^2 within [0, {tau_max:.6f}]",
+        flush=True,
+    )
+
+    def _select(
+        tau: float,
+        metrics: Dict[str, float],
+        source: str,
+    ) -> Dict[str, float]:
+        print(
+            f"[Tau auto] selected posterior_tau={float(tau):.6f} "
+            f"source={source} "
+            f"anchor_acc={metrics['acc_bayes']*100:.2f}% "
+            f"anchor_nll={metrics['nll_bayes']:.6f} "
+            f"anchor_kl={metrics['kl_map_to_bayes']:.6f} "
+            f"kl_window=[{kl_target_low:.6f}, {kl_target_high:.6f}]",
+            flush=True,
+        )
+        return {
+            "optimal_posterior_tau": float(tau),
+            "baseline_acc": float(acc0),
+            "baseline_nll": float(nll0),
+            "selected_acc": float(metrics["acc_bayes"]),
+            "selected_nll": float(metrics["nll_bayes"]),
+            "selected_kl_map_to_bayes": float(metrics["kl_map_to_bayes"]),
+            "acc_tolerance": float(acc_tolerance),
+            "kl_target": float(kl_target),
+            "kl_target_low": float(kl_target_low),
+            "kl_target_high": float(kl_target_high),
+            "tau_max": float(tau_max),
+            "anchor_n_samples": int(anchor_n_samples),
+        }
+
+    probe_metrics = _eval_tau(
+        probe_tau,
+        n_samples=int(anchor_n_samples),
+        desc=f"TAU-AUTO probe tau={probe_tau:.4f}",
+    )
+    probe_kl = float(probe_metrics["kl_map_to_bayes"])
+    probe_accuracy_ok = _tau_accuracy_ok(probe_metrics, acc_floor=acc_floor)
+    probe_in_window = _tau_kl_in_window(
+        probe_metrics,
+        kl_low=kl_target_low,
+        kl_high=kl_target_high,
+    )
+    records.append((float(probe_tau), probe_metrics, "probe"))
+    print(
+        f"[Tau auto] probe tau={probe_tau:.6f} "
+        f"acc={probe_metrics['acc_bayes']*100:.2f}% "
+        f"nll={probe_metrics['nll_bayes']:.6f} "
+        f"kl={probe_kl:.6f} "
+        f"accuracy_ok={int(probe_accuracy_ok)} kl_in_window={int(probe_in_window)}",
+        flush=True,
+    )
+    if probe_in_window:
+        return _select(probe_tau, probe_metrics, "probe_kl_window")
+
+    if probe_kl <= eps:
+        tau_hat = tau_max
+    else:
+        tau_hat = probe_tau * math.sqrt(max(kl_target, 0.0) / max(probe_kl, eps))
+        tau_hat = min(max(float(tau_hat), 0.0), tau_max)
+    print(
+        f"[Tau auto] direct estimate from probe: "
+        f"tau={tau_hat:.6f} = {probe_tau:.6f} * sqrt({kl_target:.6f} / {max(probe_kl, eps):.6f})",
+        flush=True,
+    )
+
+    if abs(float(tau_hat) - float(probe_tau)) <= 1e-8:
+        tau_hat_metrics = probe_metrics
+    else:
+        tau_hat_metrics = _eval_tau(
+            tau_hat,
+            n_samples=int(anchor_n_samples),
+            desc=f"TAU-AUTO direct tau={tau_hat:.4f}",
+        )
+        records.append((float(tau_hat), tau_hat_metrics, "direct"))
+    tau_hat_accuracy_ok = _tau_accuracy_ok(tau_hat_metrics, acc_floor=acc_floor)
+    tau_hat_in_window = _tau_kl_in_window(
+        tau_hat_metrics,
+        kl_low=kl_target_low,
+        kl_high=kl_target_high,
+    )
+    print(
+        f"[Tau auto] direct tau={tau_hat:.6f} "
+        f"acc={tau_hat_metrics['acc_bayes']*100:.2f}% "
+        f"nll={tau_hat_metrics['nll_bayes']:.6f} "
+        f"kl={tau_hat_metrics['kl_map_to_bayes']:.6f} "
+        f"accuracy_ok={int(tau_hat_accuracy_ok)} kl_in_window={int(tau_hat_in_window)}",
+        flush=True,
+    )
+    if tau_hat_in_window:
+        return _select(tau_hat, tau_hat_metrics, "direct_kl_window")
+
+    tau_hat_kl = float(tau_hat_metrics["kl_map_to_bayes"])
+    if tau_hat_kl > eps and tau_hat > 0.0:
+        tau_refined = tau_hat * math.sqrt(max(kl_target, 0.0) / max(tau_hat_kl, eps))
+        tau_refined = min(max(float(tau_refined), 0.0), tau_max)
+        print(
+            f"[Tau auto] one-step KL refinement: "
+            f"tau={tau_refined:.6f} = {tau_hat:.6f} * sqrt({kl_target:.6f} / {tau_hat_kl:.6f})",
+            flush=True,
+        )
+        if abs(float(tau_refined) - float(tau_hat)) > 1e-8:
+            refined_metrics = _eval_tau(
+                tau_refined,
+                n_samples=int(anchor_n_samples),
+                desc=f"TAU-AUTO refined tau={tau_refined:.4f}",
+            )
+            records.append((float(tau_refined), refined_metrics, "refined"))
+            refined_accuracy_ok = _tau_accuracy_ok(refined_metrics, acc_floor=acc_floor)
+            refined_in_window = _tau_kl_in_window(
+                refined_metrics,
+                kl_low=kl_target_low,
+                kl_high=kl_target_high,
+            )
+            print(
+                f"[Tau auto] refined tau={tau_refined:.6f} "
+                f"acc={refined_metrics['acc_bayes']*100:.2f}% "
+                f"nll={refined_metrics['nll_bayes']:.6f} "
+                f"kl={refined_metrics['kl_map_to_bayes']:.6f} "
+                f"accuracy_ok={int(refined_accuracy_ok)} kl_in_window={int(refined_in_window)}",
+                flush=True,
+            )
+            if refined_in_window:
+                return _select(tau_refined, refined_metrics, "refined_kl_window")
+
+            refined_kl = float(refined_metrics["kl_map_to_bayes"])
+            direct_kl = float(tau_hat_metrics["kl_map_to_bayes"])
+            if (
+                min(direct_kl, refined_kl) <= kl_target_low
+                and max(direct_kl, refined_kl) >= kl_target_high
+                and abs(direct_kl - refined_kl) > eps
+            ):
+                if direct_kl <= refined_kl:
+                    tau_low, kl_low_actual = float(tau_hat), direct_kl
+                    tau_high, kl_high_actual = float(tau_refined), refined_kl
+                else:
+                    tau_low, kl_low_actual = float(tau_refined), refined_kl
+                    tau_high, kl_high_actual = float(tau_hat), direct_kl
+                tau_interp = tau_low + (
+                    (kl_target_low - kl_low_actual)
+                    / max(kl_high_actual - kl_low_actual, eps)
+                    * (tau_high - tau_low)
+                )
+                tau_interp = min(max(float(tau_interp), 0.0), tau_max)
+                print(
+                    f"[Tau auto] linear KL interpolation: tau={tau_interp:.6f} "
+                    f"from ({tau_low:.6f}, kl={kl_low_actual:.6f}) "
+                    f"to ({tau_high:.6f}, kl={kl_high_actual:.6f}) "
+                    f"target_kl={kl_target_low:.6f}; selecting without extra eval",
+                    flush=True,
+                )
+                interp_metrics = dict(refined_metrics if refined_kl < direct_kl else tau_hat_metrics)
+                interp_metrics["kl_map_to_bayes"] = float(kl_target_low)
+                return _select(tau_interp, interp_metrics, "interp_linear_kl_no_eval")
+
+    selected_tau, selected_metrics, selected_source = min(
+        records,
+        key=lambda item: _tau_kl_window_distance(
+            item[1],
+            kl_low=kl_target_low,
+            kl_high=kl_target_high,
+        ),
+    )
+    return _select(float(selected_tau), selected_metrics, f"{selected_source}_closest_kl")
+
+
 # =========================
 # Main
 # =========================
@@ -1593,15 +1979,8 @@ def main():
         "--kfac_backend",
         type=str,
         default=KFAC_BACKEND,
-        choices=["hook", "asdl"],
-        help="KFAC backend. 'hook' restores the legacy hook-based KFAC path; 'asdl' uses the ASDL Kron backend.",
-    )
-    parser.add_argument(
-        "--kfac_token_mode",
-        type=str,
-        default=KFAC_TOKEN_MODE,
-        choices=["last", "all_valid"],
-        help="Token-selection mode for the legacy hook KFAC backend.",
+        choices=["asdl"],
+        help="KFAC backend. Only ASDL Kron is supported.",
     )
     parser.add_argument(
         "--max_kfac_samples_per_slice",
@@ -1618,15 +1997,6 @@ def main():
         help=(
             "Temporarily disable nn.Dropout modules while building KFAC and mu observations. "
             "Useful to isolate train-mode dropout effects."
-        ),
-    )
-    parser.add_argument(
-        "--mu_obs_use_selected_token_weight_grads",
-        type=_parse_bool,
-        default=MU_OBS_USE_SELECTED_TOKEN_WEIGHT_GRADS,
-        help=(
-            "If true, estimate mu-observation g_x from selected-token local linear weight grads "
-            "instead of full parameter gradients. Token selection follows --kfac_token_mode."
         ),
     )
     parser.add_argument(
@@ -1653,6 +2023,19 @@ def main():
         help="If > 0 and --slices_dir is omitted, assign balanced random slice ids to the source-task training split.",
     )
     parser.add_argument(
+        "--slice_order",
+        type=str,
+        default=SLICE_ORDER,
+        choices=["sorted", "reverse", "shuffle"],
+        help="Order in which slice ids are fed to the LGSSM/Kalman chain.",
+    )
+    parser.add_argument(
+        "--slice_order_seed",
+        type=int,
+        default=SLICE_ORDER_SEED,
+        help="Random seed used only when --slice_order shuffle.",
+    )
+    parser.add_argument(
         "--map_dir",
         type=str,
         required=True,
@@ -1668,14 +2051,64 @@ def main():
         "--s_q",
         type=float,
         default=float(S_Q),
-        help="Global process-noise scale. In module_constant mode it scales the learned per-module Q_m; in constant mode it sets Q_t = s_Q * I.",
+        help=(
+            "Global process-noise scale. In constant mode it sets Q_t = s_Q * I. "
+            "In module_constant/module_gap modes it scales the learned module/gap multipliers."
+        ),
     )
     parser.add_argument(
         "--q_mode",
         type=str,
-        choices=["module_constant", "constant"],
+        choices=["constant", "module_constant", "module_gap"],
         default=Q_MODE,
-        help="Process-noise mode: learned per-module constant Q_m, or a shared scalar constant Q_t = s_Q * I.",
+        help=(
+            "Process-noise construction. constant uses shared Q_t = s_Q * I; "
+            "module_constant uses per-module q_m from adjacent-mu drift; "
+            "module_gap additionally modulates Q_t by adjacent slice-gap scales."
+        ),
+    )
+    parser.add_argument(
+        "--module_q_clip_min",
+        type=float,
+        default=MODULE_Q_CLIP_MIN,
+        help="Lower clip for per-module Q scales from adjacent-mu drift.",
+    )
+    parser.add_argument(
+        "--module_q_clip_max",
+        type=float,
+        default=MODULE_Q_CLIP_MAX,
+        help="Upper clip for per-module Q scales from adjacent-mu drift.",
+    )
+    parser.add_argument(
+        "--module_q_shrink_exponent",
+        type=float,
+        default=MODULE_Q_SHRINK_EXPONENT,
+        help=(
+            "Log-normal shrinkage exponent beta for module_constant/module_gap Q. "
+            "q_m/s_Q = clip((drift_m / median_drift) ** beta). "
+            "0 makes all modules equal; 1 recovers the raw adjacent-mu drift heuristic."
+        ),
+    )
+    parser.add_argument(
+        "--gap_q_clip_min",
+        type=float,
+        default=GAP_Q_CLIP_MIN,
+        help="Lower clip for per-slice gap Q scales in module_gap mode.",
+    )
+    parser.add_argument(
+        "--gap_q_clip_max",
+        type=float,
+        default=GAP_Q_CLIP_MAX,
+        help="Upper clip for per-slice gap Q scales in module_gap mode.",
+    )
+    parser.add_argument(
+        "--gap_q_shrink_exponent",
+        type=float,
+        default=GAP_Q_SHRINK_EXPONENT,
+        help=(
+            "Log-normal shrinkage exponent beta for per-slice gap Q scales in module_gap mode. "
+            "rho_t = clip((gap_drift_t / median_gap_drift) ** beta)."
+        ),
     )
     parser.add_argument(
         "--constant_q_var",
@@ -1693,6 +2126,23 @@ def main():
     )
     parser.add_argument("--mc_eval_samples", type=int, default=MC_EVAL_SAMPLES, help="Number of MC posterior samples during evaluation.")
     parser.add_argument(
+        "--posterior_eval_mode",
+        type=str,
+        default=POSTERIOR_EVAL_MODE,
+        choices=["lgssm_final", "independent_slice_ensemble"],
+        help=(
+            "Posterior predictive mode. lgssm_final samples the final Kalman-filtered "
+            "state. independent_slice_ensemble samples each slice-local posterior "
+            "independently and averages their posterior predictive probabilities."
+        ),
+    )
+    parser.add_argument(
+        "--independent_slice_mc_samples_per_slice",
+        type=int,
+        default=INDEPENDENT_SLICE_MC_SAMPLES_PER_SLICE,
+        help="MC samples per slice when --posterior_eval_mode independent_slice_ensemble.",
+    )
+    parser.add_argument(
         "--mc_eval_chunk",
         type=int,
         default=0,
@@ -1700,6 +2150,83 @@ def main():
     )
     parser.add_argument("--posterior_tau", type=float, default=POSTERIOR_TAU, help="Posterior scale multiplier used at evaluation.")
     parser.add_argument("--temp_bayes", type=float, default=TEMP_BAYES, help="Temperature applied to Bayesian mean probabilities.")
+    parser.add_argument(
+        "--tau_mode",
+        type=str,
+        default=TAU_MODE,
+        choices=["fixed", "auto"],
+        help="fixed uses --posterior_tau. auto estimates tau from anchor KL using KL(tau) ~= C * tau^2.",
+    )
+    parser.add_argument(
+        "--auto_tau",
+        type=_parse_bool,
+        nargs="?",
+        const=True,
+        default=False,
+        help="Alias for --tau_mode auto.",
+    )
+    parser.add_argument(
+        "--tau_search_max",
+        type=float,
+        default=TAU_SEARCH_MAX,
+        help="Upper bound for automatic posterior_tau estimation.",
+    )
+    parser.add_argument(
+        "--tau_search_iters",
+        type=int,
+        default=TAU_SEARCH_ITERS,
+        help="Deprecated compatibility option; direct KL tau estimation does not use binary search.",
+    )
+    parser.add_argument(
+        "--tau_anchor_size",
+        type=int,
+        default=TAU_ANCHOR_SIZE,
+        help="Maximum number of source-train anchor examples for tau estimation. <=0 uses the full train split.",
+    )
+    parser.add_argument(
+        "--tau_anchor_bsz",
+        type=int,
+        default=TAU_ANCHOR_BSZ,
+        help="Batch size for source-train anchor tau estimation.",
+    )
+    parser.add_argument(
+        "--tau_anchor_n_samples",
+        type=int,
+        default=TAU_ANCHOR_N_SAMPLES,
+        help="MC samples per nonzero tau during automatic tau estimation.",
+    )
+    parser.add_argument(
+        "--tau_acc_tolerance",
+        type=float,
+        default=TAU_ACC_TOLERANCE,
+        help="Accuracy-drop reference from tau=0, logged during direct KL automatic tau estimation.",
+    )
+    parser.add_argument(
+        "--tau_kl_target_low",
+        type=float,
+        default=TAU_KL_TARGET_LOW,
+        help="Lower edge of target anchor KL(MAP || Bayes) window for automatic tau estimation.",
+    )
+    parser.add_argument(
+        "--tau_kl_target_high",
+        type=float,
+        default=TAU_KL_TARGET_HIGH,
+        help="Upper edge of target anchor KL(MAP || Bayes) window for automatic tau estimation.",
+    )
+    parser.add_argument(
+        "--posterior_stats_cache_path",
+        type=str,
+        default="",
+        help=(
+            "Optional path for caching KFAC/subspace/mu stats. Matching caches skip "
+            "the expensive KFAC and mu stages, while still allowing q/tau/temp/MC sweeps."
+        ),
+    )
+    parser.add_argument(
+        "--force_rebuild_posterior_stats_cache",
+        action="store_true",
+        help="Rebuild and overwrite --posterior_stats_cache_path even if it already exists.",
+    )
     parser.add_argument(
         "--tokenizer_padding_side",
         type=str,
@@ -1733,15 +2260,6 @@ def main():
         help="Match bayesian-peft tokenizer.add_eos_token handling when eval_protocol=bayesian_peft.",
     )
     parser.add_argument(
-        "--bayesian_peft_perturb_lm_head",
-        type=_parse_bool,
-        default=BAYESIAN_PEFT_PERTURB_LM_HEAD,
-        help=(
-            "Whether Seq posterior sampling should perturb lm_head LoRA-A when "
-            "eval_protocol=bayesian_peft. Defaults to true to match the full-vocab tfb/blob behavior."
-        ),
-    )
-    parser.add_argument(
         "--iid_eval_split",
         type=str,
         default=IID_EVAL_SPLIT,
@@ -1759,6 +2277,8 @@ def main():
         ),
     )
     args = parser.parse_args()
+    if bool(args.auto_tau):
+        args.tau_mode = "auto"
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
@@ -1780,8 +2300,10 @@ def main():
     cpu_device = torch.device("cpu")
     print("Using device:", device)
     eval_protocol = _normalize_eval_protocol(args.eval_protocol)
+    args.eval_protocol = eval_protocol
     apply_choice_mask = not _is_bayesian_peft_protocol(eval_protocol)
     keep_full_vocab_lm_head = bool(args.keep_full_vocab_lm_head) or _is_bayesian_peft_protocol(eval_protocol)
+    args.keep_full_vocab_lm_head = bool(keep_full_vocab_lm_head)
     print(f"[Protocol] eval_protocol={eval_protocol}")
     print(
         "[Curvature backend] Using ASDL Kron on the full wrapper graph "
@@ -1920,7 +2442,7 @@ def main():
                 collate_fn=_BayesianPeftCLMCollator(eval_task_dataset),
                 batch_size=args.eval_bsz,
                 shuffle=False,
-                drop_last=True,
+                drop_last=False,
                 num_workers=args.eval_num_workers,
                 pin_memory=pin_memory,
                 prefetch_factor=args.eval_prefetch_factor,
@@ -1964,7 +2486,18 @@ def main():
         if "seq_len" not in train_proc.column_names:
             train_proc = train_proc.add_column("seq_len", [len(x) for x in train_proc["input_ids"]])
 
-    slice_ids = sorted(set(int(x) for x in train_raw["slice_id"]))
+    natural_slice_ids = sorted(set(int(x) for x in train_raw["slice_id"]))
+    slice_ids = list(natural_slice_ids)
+    if str(args.slice_order) == "reverse":
+        slice_ids = list(reversed(slice_ids))
+    elif str(args.slice_order) == "shuffle":
+        rng = random.Random(int(args.slice_order_seed))
+        rng.shuffle(slice_ids)
+    print(
+        f"[Slices] source={slice_source} natural_ids={natural_slice_ids} "
+        f"order={args.slice_order} order_seed={int(args.slice_order_seed)} run_ids={slice_ids}",
+        flush=True,
+    )
     T = len(slice_ids)
 
     kfac_collator = DynamicEvalCollator(
@@ -1985,18 +2518,18 @@ def main():
                 rng = random.Random(42)
                 rng.shuffle(slice_indices)
                 slice_indices = slice_indices[:max_kfac_samples_per_slice]
-            eff_batches = len(slice_indices) // args.kfac_bsz
-            eff_samples = eff_batches * args.kfac_bsz
+            eff_samples = len(slice_indices)
+            eff_batches = math.ceil(eff_samples / max(int(args.kfac_bsz), 1))
             total_kfac_samples += eff_samples
             total_kfac_batches += eff_batches
-            ds_loader = Subset(train_raw, slice_indices[:eff_samples])
+            ds_loader = Subset(train_raw, slice_indices)
             slice_loaders.append(
                 _make_direct_bayesian_peft_loader(
                     ds_loader,
                     collate_fn=direct_bayesian_peft_collator,
                     batch_size=args.kfac_bsz,
                     shuffle=False,
-                    drop_last=True,
+                    drop_last=False,
                     num_workers=args.num_workers,
                     pin_memory=pin_memory,
                     prefetch_factor=args.eval_prefetch_factor,
@@ -2008,10 +2541,8 @@ def main():
         if max_kfac_samples_per_slice is not None and len(ds_t) > max_kfac_samples_per_slice:
             ds_t = ds_t.shuffle(seed=42).select(range(max_kfac_samples_per_slice))
         ds_t = ds_t.sort("seq_len")
-        eff_batches = len(ds_t) // args.kfac_bsz
-        eff_samples = eff_batches * args.kfac_bsz
-        if eff_samples < len(ds_t):
-            ds_t = ds_t.select(range(eff_samples))
+        eff_samples = len(ds_t)
+        eff_batches = math.ceil(eff_samples / max(int(args.kfac_bsz), 1))
         total_kfac_samples += eff_samples
         total_kfac_batches += eff_batches
         ds_loader = ds_t.remove_columns(["seq_len"]) if "seq_len" in ds_t.column_names else ds_t
@@ -2020,333 +2551,243 @@ def main():
                 ds_loader,
                 batch_size=args.kfac_bsz,
                 shuffle=False,
-                drop_last=True,
+                drop_last=False,
                 collate_fn=kfac_collator,
                 num_workers=args.num_workers,
                 pin_memory=pin_memory,
             )
         )
+    print(
+        f"[KFAC] prepared {len(slice_loaders)} slices from {slice_source}; "
+        f"samples={total_kfac_samples} batches={total_kfac_batches} drop_last=False",
+        flush=True,
+    )
     forward_call_for_kfac = forward_call_for_kfac_factory(
         amp_dtype,
         choice_token_ids,
         apply_choice_mask=apply_choice_mask,
-        kfac_token_mode=str(args.kfac_token_mode),
     )
-    H_factor_per_module, G_factor_per_module, module_names = {}, {}, None
-
-    dropout_ctx = (
-        _temporarily_disable_dropout_modules(model)
-        if bool(args.disable_dropout_during_kfac_mu)
-        else nullcontext()
+    stats_cache_path = str(args.posterior_stats_cache_path).strip()
+    train_raw_fingerprint = _dataset_fingerprint(train_raw)
+    train_proc_fingerprint = (
+        _dataset_fingerprint(train_proc)
+        if train_proc is not None
+        else f"direct_bayesian_peft:{_dataset_fingerprint(train_raw)}"
+    )
+    stats_cache_snapshot = _build_posterior_stats_cache_snapshot(
+        args,
+        slice_ids=slice_ids,
+        train_raw_fingerprint=train_raw_fingerprint,
+        train_proc_fingerprint=train_proc_fingerprint,
     )
 
-    with _StageTimer(f"TRAIN-STAGE Seq-LoRA posterior build on {args.task}"), dropout_ctx:
-        for t_idx, loader_t in enumerate(slice_loaders):
-            print(
-                f"[KFAC] slice {t_idx + 1}/{len(slice_loaders)} "
-                f"sid={slice_ids[t_idx]} batches={len(loader_t)}"
+    stats_cache_loaded = False
+    if stats_cache_path and os.path.exists(stats_cache_path) and not bool(args.force_rebuild_posterior_stats_cache):
+        module_specs, module_R_lists, mu_global_list_raw, cached_T = _load_posterior_stats_cache(
+            stats_cache_path,
+            stats_cache_snapshot,
+        )
+        if int(cached_T) != int(T):
+            raise RuntimeError(
+                f"Posterior-stats cache at {stats_cache_path} has T={cached_T}, current T={T}."
             )
-            autocast_ctx = (
-                torch.amp.autocast(device_type="cuda", enabled=False)
-                if device.type == "cuda"
-                else type("NoOp", (), {"__enter__": lambda s: None, "__exit__": lambda s, *a: False})()
-            )
-
-            with autocast_ctx:
-                factors = calculate_kronecker_factors(
-                    model=model,
-                    forward_call=forward_call_for_kfac,
-                    loader=loader_t,
-                    n_kfac=args.n_kfac,
-                    lr_threshold=args.lr_threshold,
-                    target_module_keywords=["lora_A"],
-                    exclude_bias=False,
-                    use_tqdm=False,
-                    disable_dropout=bool(args.disable_dropout_during_kfac_mu),
-                ) if str(args.kfac_backend) == "asdl" else calculate_kronecker_factors_hook(
-                    model=model,
-                    forward_call=forward_call_for_kfac,
-                    loader=loader_t,
-                    n_kfac=args.n_kfac,
-                    lr_threshold=args.lr_threshold,
-                    target_module_keywords=["lora_A"],
-                    exclude_bias=False,
-                    use_tqdm=False,
-                )
-            print(f"[KFAC] slice {t_idx + 1}/{len(slice_loaders)} done")
-
-            if module_names is None:
-                module_names = _resolve_bayes_module_names(factors)
-                module_names = _filter_bayes_module_names(
-                    module_names,
-                    eval_protocol=eval_protocol,
-                    perturb_lm_head=bool(args.bayesian_peft_perturb_lm_head),
-                )
-                for n in module_names:
-                    H_factor_per_module[n], G_factor_per_module[n] = [], []
-
-            for name in module_names:
-                A_t, S_t = factors[name]
-                # Retain the compact KFAC factors instead of materializing
-                # full H_t / G_t on the CPU. We only expand/project later when
-                # compressing into the small Seq-LoRA subspace.
-                H_factor_per_module[name].append(
-                    A_t.detach().to(dtype=torch.float64, device=cpu_device)
-                )
-                G_factor_per_module[name].append(
-                    S_t.detach().to(dtype=torch.float64, device=cpu_device)
-                )
-
-                del A_t, S_t
-
-            factors.clear()
-            del factors
-            gc.collect()
-            if device.type == "cuda":
-                torch.cuda.empty_cache()
-                torch.cuda.ipc_collect()
-
-        module_subspace_info, module_R_lists, module_Hx_lists = {}, {}, {}
-        for name in module_names:
-            H_factors = H_factor_per_module[name]
-            G_factors = G_factor_per_module[name]
-
-            H_bar_bal = materialize_mean_psd_from_factors(
-                H_factors,
-                matrix_scale=1.0,
-                device=device,
-                dtype=torch.float64,
-            )
-            G_bar_bal = materialize_mean_psd_from_factors(
-                G_factors,
-                matrix_scale=1.0,
-                device=device,
-                dtype=torch.float64,
-            )
-
-            subspace_info_gpu = build_global_kronecker_eigenspace(
-                H_list=[H_bar_bal],
-                G_B_list=[G_bar_bal],
-                subspace_dim=args.subspace_dim_per_module,
-                eps_eig=1e-6,
-            )
-            H_x_list, R_list = project_curvature_factors_to_subspace(
-                H_factors=H_factors,
-                G_B_factors=G_factors,
-                subspace_info=subspace_info_gpu,
-                lambda_damp=1e-4,
-                H_matrix_scale=1.0,
-                G_matrix_scale=1.0,
-                work_device=device,
-                out_device=cpu_device,
-                dtype=torch.float64,
-            )
-            module_subspace_info[name] = _move_subspace_info(
-                subspace_info_gpu,
-                device=cpu_device,
-                dtype=torch.float64,
-            )
-            module_Hx_lists[name] = H_x_list
-            module_R_lists[name] = R_list
-
-            H_factors.clear()
-            G_factors.clear()
-            del H_bar_bal, G_bar_bal, subspace_info_gpu
-            gc.collect()
-            if device.type == "cuda":
-                torch.cuda.empty_cache()
-        H_factor_per_module.clear()
-        G_factor_per_module.clear()
-
-        module_specs, offset = [], 0
-        for name in module_names:
-            Lm = int(module_subspace_info[name]["U_lora"].shape[1])
-            module_specs.append(
-                {
-                    "name": name,
-                    "subspace_info": module_subspace_info[name],
-                    "offset": offset,
-                    "L": Lm,
-                }
-            )
-            offset += Lm
-        L_total = offset
         lora_cache = build_loraA_cache(model, module_specs, device=device)
+        stats_cache_loaded = True
+        print(f"[Posterior Stats Cache] loaded from {stats_cache_path} (modules={len(module_specs)} T={cached_T})")
 
-        estimate_mu_fn = (
-            estimate_mu_global_list_from_slice_grads_asdl
-            if str(args.kfac_backend) == "asdl"
-            else (
-                estimate_mu_global_list_from_slice_local_weight_grads
-                if bool(args.mu_obs_use_selected_token_weight_grads)
-                else estimate_mu_global_list_from_slice_grads
-            )
-        )
-        mu_kwargs = (
-            {"disable_dropout": bool(args.disable_dropout_during_kfac_mu)}
-            if str(args.kfac_backend) == "asdl"
-            else {}
-        )
-        mu_global_list_raw = estimate_mu_fn(
-            model,
-            slice_loaders,
-            forward_call_for_kfac,
-            module_names,
-            module_subspace_info,
-            module_R_lists,
-            device,
-            args.mu_obs_batches,
-            torch.float64,
-            **mu_kwargs,
-        )
-        mu_global_list = [float(args.mu_obs_scale) * mu_t for mu_t in mu_global_list_raw]
-
-        print(f"\n=== Kalman Filter Only (module-wise) ===")
-        print(f"[Kalman] modules={len(module_specs)} L_total={L_total}")
-
-        if args.forecast_horizon > 0:
-            print(
-                f"\nDirectly sampling forecast posterior (t=T+{args.forecast_horizon} | T): "
-                f"S={args.mc_eval_samples}"
-            )
-        else:
-            print(f"\nDirectly sampling final posterior (t=T): S={args.mc_eval_samples}")
-
-        x_sample_parts: List[Tensor] = []
-        module_constant_q_stats: Dict[str, Dict[str, float]] = {}
-        use_module_constant_q = args.q_mode == "module_constant"
-        for spec in module_specs:
-            name = spec["name"]
-            offset = int(spec["offset"])
-            Lm = int(spec["L"])
-            mu_module_list = [
-                mu_t[offset : offset + Lm].to(device=cpu_device, dtype=torch.float64)
-                for mu_t in mu_global_list
-            ]
-            H_x_list = module_Hx_lists[name]
-            H_obs_list, y_list = prepare_lgssm_observations(
-                module_R_lists[name],
-                mu_list=mu_module_list,
-            )
-            m1 = torch.zeros(Lm, device=cpu_device, dtype=torch.float64)
-            P1 = float(args.p1_var) * torch.eye(Lm, device=cpu_device, dtype=torch.float64)
-
-            if use_module_constant_q:
-                U_q, nu_bar = _build_module_q_basis(
-                    H_x_list,
-                    eps_rel=ADAPTIVE_Q_EIG_FLOOR,
-                    dtype=torch.float64,
+    if stats_cache_loaded:
+        with _StageTimer(f"TRAIN-STAGE Seq-LoRA posterior sample from cached stats on {args.task}"):
+            if str(args.posterior_eval_mode) == "independent_slice_ensemble":
+                x_samples_T = _sample_independent_slice_ensemble_from_stats(
+                    args=args,
+                    module_specs=module_specs,
+                    module_R_lists=module_R_lists,
+                    mu_global_list_raw=mu_global_list_raw,
+                    T=T,
+                    cpu_device=cpu_device,
                 )
-
-                warm_Q_list = materialize_scalar_Q_list(
-                    [ADAPTIVE_Q_WARMSTART_VAR for _ in range(T)],
-                    L=Lm,
-                    device=cpu_device,
-                    dtype=torch.float64,
-                )
-                x_filt_w, P_filt_w, x_pred_w, P_pred_w = kalman_filter(
-                    H_list=H_obs_list,
-                    y_list=y_list,
-                    Q_list=warm_Q_list,
-                    m1=m1,
-                    P1=P1,
-                )
-                x_smooth_w, P_smooth_w, J_w = rts_smoother(
-                    x_filt_w,
-                    P_filt_w,
-                    x_pred_w,
-                    P_pred_w,
-                    warm_Q_list,
-                )
-                lag_cov_w = lag_one_smoothed_covariances(P_smooth_w, J_w)
-                q_diag, q_stats = _estimate_module_q_diag(
-                    x_smooth_w,
-                    P_smooth_w,
-                    lag_cov_w,
-                    U_q,
-                    nu_bar,
-                    eps=_adaptive_q_eps(torch.float64),
-                )
-                Q_list = materialize_constant_module_Q_list(
-                    U_q,
-                    q_diag,
-                    num_steps=T,
-                    s_q=float(args.s_q),
-                    device=cpu_device,
-                    dtype=torch.float64,
-                )
-                module_constant_q_stats[name] = {
-                    **q_stats,
-                    "nu_min": float(nu_bar.min().item()),
-                    "nu_mean": float(nu_bar.mean().item()),
-                    "nu_max": float(nu_bar.max().item()),
-                }
             else:
-                Q_list = materialize_scalar_Q_list(
-                    [float(args.s_q) for _ in range(T)],
-                    L=Lm,
-                    device=cpu_device,
+                x_samples_T = _sample_posterior_from_stats(
+                    args=args,
+                    module_specs=module_specs,
+                    module_R_lists=module_R_lists,
+                    mu_global_list_raw=mu_global_list_raw,
+                    T=T,
+                    device=device,
+                    cpu_device=cpu_device,
+                )
+    else:
+        H_factor_per_module, G_factor_per_module, module_names = {}, {}, None
+
+        dropout_ctx = (
+            _temporarily_disable_dropout_modules(model)
+            if bool(args.disable_dropout_during_kfac_mu)
+            else nullcontext()
+        )
+
+        with _StageTimer(f"TRAIN-STAGE Seq-LoRA posterior build on {args.task}"), dropout_ctx:
+            for t_idx, loader_t in enumerate(slice_loaders):
+                print(
+                    f"[KFAC] slice {t_idx + 1}/{len(slice_loaders)} "
+                    f"sid={slice_ids[t_idx]} batches={len(loader_t)}",
+                    flush=True,
+                )
+                autocast_ctx = (
+                    torch.amp.autocast(device_type="cuda", enabled=False)
+                    if device.type == "cuda"
+                    else type("NoOp", (), {"__enter__": lambda s: None, "__exit__": lambda s, *a: False})()
+                )
+
+                with autocast_ctx:
+                    factors = calculate_kronecker_factors(
+                        model=model,
+                        forward_call=forward_call_for_kfac,
+                        loader=loader_t,
+                        n_kfac=args.n_kfac,
+                        lr_threshold=args.lr_threshold,
+                        target_module_keywords=["lora_A"],
+                        exclude_bias=False,
+                        use_tqdm=False,
+                        disable_dropout=bool(args.disable_dropout_during_kfac_mu),
+                    )
+                print(f"[KFAC] slice {t_idx + 1}/{len(slice_loaders)} done", flush=True)
+
+                if module_names is None:
+                    module_names = _resolve_bayes_module_names(factors)
+                    for n in module_names:
+                        H_factor_per_module[n], G_factor_per_module[n] = [], []
+
+                for name in module_names:
+                    A_t, S_t = factors[name]
+                    H_factor_per_module[name].append(
+                        A_t.detach().to(dtype=torch.float64, device=cpu_device)
+                    )
+                    G_factor_per_module[name].append(
+                        S_t.detach().to(dtype=torch.float64, device=cpu_device)
+                    )
+                    del A_t, S_t
+
+                factors.clear()
+                del factors
+                gc.collect()
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+
+            module_subspace_info, module_R_lists = {}, {}
+            for name in module_names:
+                H_factors = H_factor_per_module[name]
+                G_factors = G_factor_per_module[name]
+
+                H_bar_bal = materialize_mean_psd_from_factors(
+                    H_factors,
+                    matrix_scale=1.0,
+                    device=device,
+                    dtype=torch.float64,
+                )
+                G_bar_bal = materialize_mean_psd_from_factors(
+                    G_factors,
+                    matrix_scale=1.0,
+                    device=device,
                     dtype=torch.float64,
                 )
 
-            x_filt_m, P_filt_m, _, _ = kalman_filter(
-                H_list=H_obs_list,
-                y_list=y_list,
-                Q_list=Q_list,
-                m1=m1,
-                P1=P1,
-            )
-            mu_T_m, cov_T_m = _forecast_from_final_posterior(
-                x_T=x_filt_m[-1],
-                P_T=P_filt_m[-1],
-                Q_list=Q_list,
-                horizon=int(args.forecast_horizon),
-            )
-            cov_T_stable = cov_T_m + torch.eye(
-                cov_T_m.shape[0],
-                device=cov_T_m.device,
-                dtype=cov_T_m.dtype,
-            ) * 1e-6
-
-            dist_m = torch.distributions.MultivariateNormal(
-                mu_T_m,
-                covariance_matrix=cov_T_stable,
-            )
-            x_sample_parts.append(dist_m.sample((int(args.mc_eval_samples),)))
-
-            del (
-                H_obs_list,
-                y_list,
-                Q_list,
-                x_filt_m,
-                P_filt_m,
-                mu_T_m,
-                cov_T_m,
-                cov_T_stable,
-                dist_m,
-            )
-            if use_module_constant_q:
-                del (
-                    warm_Q_list,
-                    x_filt_w,
-                    P_filt_w,
-                    x_pred_w,
-                    P_pred_w,
-                    x_smooth_w,
-                    P_smooth_w,
-                    J_w,
-                    lag_cov_w,
-                    q_diag,
+                subspace_info_gpu = build_global_kronecker_eigenspace(
+                    H_list=[H_bar_bal],
+                    G_B_list=[G_bar_bal],
+                    subspace_dim=args.subspace_dim_per_module,
+                    eps_eig=1e-6,
                 )
-            gc.collect()
+                H_x_list, R_list = project_curvature_factors_to_subspace(
+                    H_factors=H_factors,
+                    G_B_factors=G_factors,
+                    subspace_info=subspace_info_gpu,
+                    lambda_damp=1e-4,
+                    H_matrix_scale=1.0,
+                    G_matrix_scale=1.0,
+                    work_device=device,
+                    out_device=cpu_device,
+                    dtype=torch.float64,
+                )
+                module_subspace_info[name] = _move_subspace_info(
+                    subspace_info_gpu,
+                    device=cpu_device,
+                    dtype=torch.float64,
+                )
+                module_R_lists[name] = R_list
 
-        if use_module_constant_q:
-            _report_module_constant_q_results(module_constant_q_stats, args.s_q)
-        else:
-            _report_scalar_constant_q_results(args.s_q)
-        del mu_global_list, mu_global_list_raw
-        x_samples_T = torch.cat(x_sample_parts, dim=1).to(dtype=torch.float32)
-        del x_sample_parts
+                H_factors.clear()
+                G_factors.clear()
+                del H_bar_bal, G_bar_bal, subspace_info_gpu, H_x_list
+                gc.collect()
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
+            H_factor_per_module.clear()
+            G_factor_per_module.clear()
+
+            module_specs, offset = [], 0
+            for name in module_names:
+                Lm = int(module_subspace_info[name]["U_lora"].shape[1])
+                module_specs.append(
+                    {
+                        "name": name,
+                        "subspace_info": module_subspace_info[name],
+                        "offset": offset,
+                        "L": Lm,
+                    }
+                )
+                offset += Lm
+            lora_cache = build_loraA_cache(model, module_specs, device=device)
+
+            mu_global_list_raw = estimate_mu_global_list_from_slice_grads_asdl(
+                model,
+                slice_loaders,
+                forward_call_for_kfac,
+                module_names,
+                module_subspace_info,
+                module_R_lists,
+                device,
+                args.mu_obs_batches,
+                torch.float64,
+                disable_dropout=bool(args.disable_dropout_during_kfac_mu),
+            )
+
+            if stats_cache_path:
+                stats_cache_dir = os.path.dirname(stats_cache_path)
+                if stats_cache_dir:
+                    os.makedirs(stats_cache_dir, exist_ok=True)
+                torch.save(
+                    _build_posterior_stats_cache_payload(
+                        args=args,
+                        snapshot=stats_cache_snapshot,
+                        module_specs=module_specs,
+                        module_R_lists=module_R_lists,
+                        mu_global_list_raw=mu_global_list_raw,
+                        T=T,
+                    ),
+                    stats_cache_path,
+                )
+                print(f"[Posterior Stats Cache] saved to {stats_cache_path}", flush=True)
+
+            if str(args.posterior_eval_mode) == "independent_slice_ensemble":
+                x_samples_T = _sample_independent_slice_ensemble_from_stats(
+                    args=args,
+                    module_specs=module_specs,
+                    module_R_lists=module_R_lists,
+                    mu_global_list_raw=mu_global_list_raw,
+                    T=T,
+                    cpu_device=cpu_device,
+                )
+            else:
+                x_samples_T = _sample_posterior_from_stats(
+                    args=args,
+                    module_specs=module_specs,
+                    module_R_lists=module_R_lists,
+                    mu_global_list_raw=mu_global_list_raw,
+                    T=T,
+                    device=device,
+                    cpu_device=cpu_device,
+                )
 
     eval_collator = DynamicEvalCollator(
         tokenizer=tokenizer,
@@ -2366,6 +2807,79 @@ def main():
         eval_loader_kwargs["prefetch_factor"] = args.eval_prefetch_factor
 
     effective_posterior_tau = float(args.posterior_tau)
+    if str(args.tau_mode) == "auto":
+        if use_direct_source_bayesian_peft:
+            tau_anchor_raw = _subset_dataset(
+                train_raw,
+                subset_size=int(args.tau_anchor_size),
+                seed=int(args.seed),
+            )
+            tau_loader_kwargs = {
+                "batch_size": max(int(args.tau_anchor_bsz), 1),
+                "shuffle": False,
+                "drop_last": False,
+                "collate_fn": direct_bayesian_peft_collator,
+                "num_workers": args.eval_num_workers,
+                "pin_memory": pin_memory,
+            }
+            if args.eval_num_workers > 0:
+                tau_loader_kwargs["persistent_workers"] = True
+                tau_loader_kwargs["prefetch_factor"] = args.eval_prefetch_factor
+            tau_anchor_loader = DataLoader(tau_anchor_raw, **tau_loader_kwargs)
+            tau_anchor_rows = len(tau_anchor_raw)
+        else:
+            tau_anchor_proc = _subset_dataset(
+                train_proc,
+                subset_size=int(args.tau_anchor_size),
+                seed=int(args.seed),
+            )
+            if "seq_len" in tau_anchor_proc.column_names:
+                tau_anchor_proc = tau_anchor_proc.sort("seq_len")
+                tau_anchor_eval = tau_anchor_proc.remove_columns(["seq_len"])
+            else:
+                tau_anchor_eval = tau_anchor_proc
+            tau_loader_kwargs = dict(eval_loader_kwargs)
+            tau_loader_kwargs["batch_size"] = max(int(args.tau_anchor_bsz), 1)
+            tau_anchor_loader = DataLoader(tau_anchor_eval, **tau_loader_kwargs)
+            tau_anchor_rows = len(tau_anchor_proc)
+        print(
+            f"[Tau auto] anchor source=train rows={tau_anchor_rows} "
+            f"batch_size={tau_loader_kwargs['batch_size']} "
+            f"mc_samples={int(args.tau_anchor_n_samples)}",
+            flush=True,
+        )
+        with _StageTimer(f"FIT Seq-LoRA tau on {args.task}(train_anchor)"):
+            tau_fit_info = fit_seq_lora_tau_anchor_kl_direct(
+                model=model,
+                anchor_loader=tau_anchor_loader,
+                device=device,
+                amp_dtype=amp_dtype,
+                num_classes=num_classes,
+                choice_token_ids=choice_token_ids,
+                lora_cache=lora_cache,
+                x_samples_T=x_samples_T,
+                tau_max=float(args.tau_search_max),
+                search_iters=int(args.tau_search_iters),
+                anchor_n_samples=int(args.tau_anchor_n_samples),
+                temp_bayes=float(args.temp_bayes),
+                mc_eval_chunk=int(args.mc_eval_chunk),
+                apply_choice_mask=apply_choice_mask,
+                acc_tolerance=float(args.tau_acc_tolerance),
+                kl_target_low=float(args.tau_kl_target_low),
+                kl_target_high=float(args.tau_kl_target_high),
+            )
+        effective_posterior_tau = float(tau_fit_info["optimal_posterior_tau"])
+        del tau_anchor_loader, tau_fit_info
+        if "tau_anchor_eval" in locals():
+            del tau_anchor_eval
+        if "tau_anchor_proc" in locals():
+            del tau_anchor_proc
+        if "tau_anchor_raw" in locals():
+            del tau_anchor_raw
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+    print(f"[Tau] mode={args.tau_mode} effective_posterior_tau={effective_posterior_tau:.6f}", flush=True)
 
     def eval_one(tag: str, proc_or_loader):
         if isinstance(proc_or_loader, DataLoader):
@@ -2402,6 +2916,7 @@ def main():
         print(f"  ece_bayes: {metrics['ece_bayes']*100:.2f}%")
         print(f"  acc_bayes: {metrics['acc_bayes']*100:.2f}%")
         print(f"  kl_map_to_bayes: {metrics['kl_map_to_bayes']:.6f}")
+        print(f"  posterior_tau: {effective_posterior_tau:.6f}")
         print(
             "  [bayesian-peft style] "
             f"val_acc: {metrics['acc_bayes']}, "

@@ -1,0 +1,283 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using device: cuda
+
+[Load] base_model = Qwen/Qwen3-8B-Base
+[Load] adapter    = ./iid_qwen35_8b_scienceqa_lora_map_leftpad/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/seed_2/map_step_2000
+[Choice token ids] classes=4, ids={'A': 32, 'B': 33, 'C': 34, 'D': 35}
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 10526.98it/s]
+[Head] trimmed lm_head to 4 choice logits
+
+[Setup] Casting all LoRA params to float32 for numerical stability...
+
+[Slices] train=5991 source=slices_dir=./slice_data/scienceqa_text_closedchoice_grade2_11_curriculum_qv_lmhead_leftpad/kfac_balanced (used for KFAC only)
+
+=== Loading Dataset for Task: scienceqa_closedchoice_grade2_11 ===
+
+=== Loading Dataset for Task: obqa ===
+
+=== Loading Dataset for Task: arc-c ===
+[MMLU] loading subject: high_school_physics
+[MMLU] loading subject: high_school_chemistry
+[MMLU] loading subject: high_school_biology
+[MMLU] loading subject: college_physics
+[MMLU] loading subject: college_chemistry
+[MMLU] loading subject: college_biology
+
+[Curvature] unique slice_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9] (T=10)
+[KFAC slice] sid=0 raw=256 eff_samples=252 batches=21
+[KFAC slice] sid=1 raw=256 eff_samples=252 batches=21
+[KFAC slice] sid=2 raw=256 eff_samples=252 batches=21
+[KFAC slice] sid=3 raw=256 eff_samples=252 batches=21
+[KFAC slice] sid=4 raw=256 eff_samples=252 batches=21
+[KFAC slice] sid=5 raw=256 eff_samples=252 batches=21
+[KFAC slice] sid=6 raw=256 eff_samples=252 batches=21
+[KFAC slice] sid=7 raw=256 eff_samples=252 batches=21
+[KFAC slice] sid=8 raw=256 eff_samples=252 batches=21
+[KFAC slice] sid=9 raw=256 eff_samples=252 batches=21
+[KFAC] effective samples after per-slice cap/drop_last = 2520 across 210 batches
+
+=== Running KFAC on seq slices (targets=all LoRA-A modules in adapter) ===
+  0%|          | 0/21 [00:00<?, ?it/s]sys:1: UserWarning: Full backward hook is firing when gradients are computed with respect to module outputs since no inputs require gradients. See https://docs.pytorch.org/docs/main/generated/torch.nn.Module.html#torch.nn.Module.register_full_backward_hook for more details.
+  5%|▍         | 1/21 [00:03<01:18,  3.91s/it] 10%|▉         | 2/21 [00:04<00:39,  2.09s/it] 14%|█▍        | 3/21 [00:05<00:27,  1.55s/it] 19%|█▉        | 4/21 [00:06<00:22,  1.32s/it] 24%|██▍       | 5/21 [00:07<00:19,  1.19s/it] 29%|██▊       | 6/21 [00:08<00:16,  1.12s/it] 33%|███▎      | 7/21 [00:09<00:15,  1.07s/it] 38%|███▊      | 8/21 [00:10<00:13,  1.04s/it] 43%|████▎     | 9/21 [00:11<00:12,  1.01s/it] 48%|████▊     | 10/21 [00:12<00:10,  1.04it/s] 52%|█████▏    | 11/21 [00:13<00:09,  1.07it/s] 57%|█████▋    | 12/21 [00:14<00:08,  1.10it/s] 62%|██████▏   | 13/21 [00:14<00:07,  1.13it/s] 67%|██████▋   | 14/21 [00:15<00:06,  1.14it/s] 71%|███████▏  | 15/21 [00:16<00:05,  1.14it/s] 76%|███████▌  | 16/21 [00:17<00:04,  1.15it/s] 81%|████████  | 17/21 [00:18<00:03,  1.16it/s] 86%|████████▌ | 18/21 [00:19<00:02,  1.14it/s] 90%|█████████ | 19/21 [00:20<00:01,  1.13it/s] 95%|█████████▌| 20/21 [00:21<00:00,  1.11it/s]100%|██████████| 21/21 [00:21<00:00,  1.10it/s]100%|██████████| 21/21 [00:21<00:00,  1.05s/it]
+[Seq-LoRA] Resolved Bayesian modules: 73
+  - base_model.model.lm_head.lora_A.default
+  - base_model.model.model.layers.0.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.0.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.1.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.1.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.10.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.10.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.11.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.11.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.12.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.12.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.13.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.13.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.14.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.14.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.15.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.15.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.16.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.16.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.17.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.17.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.18.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.18.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.19.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.19.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.2.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.2.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.20.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.20.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.21.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.21.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.22.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.22.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.23.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.23.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.24.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.24.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.25.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.25.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.26.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.26.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.27.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.27.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.28.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.28.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.29.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.29.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.3.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.3.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.30.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.30.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.31.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.31.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.32.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.32.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.33.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.33.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.34.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.34.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.35.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.35.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.4.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.4.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.5.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.5.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.6.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.6.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.7.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.7.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.8.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.8.self_attn.v_proj.lora_A.default
+  - base_model.model.model.layers.9.self_attn.q_proj.lora_A.default
+  - base_model.model.model.layers.9.self_attn.v_proj.lora_A.default
+  0%|          | 0/21 [00:00<?, ?it/s]  5%|▍         | 1/21 [00:00<00:12,  1.63it/s] 10%|▉         | 2/21 [00:01<00:13,  1.40it/s] 14%|█▍        | 3/21 [00:02<00:14,  1.24it/s] 19%|█▉        | 4/21 [00:03<00:14,  1.16it/s] 24%|██▍       | 5/21 [00:04<00:14,  1.12it/s] 29%|██▊       | 6/21 [00:05<00:13,  1.09it/s] 33%|███▎      | 7/21 [00:06<00:12,  1.08it/s] 38%|███▊      | 8/21 [00:07<00:12,  1.06it/s] 43%|████▎     | 9/21 [00:08<00:11,  1.05it/s] 48%|████▊     | 10/21 [00:08<00:10,  1.06it/s] 52%|█████▏    | 11/21 [00:09<00:09,  1.08it/s] 57%|█████▋    | 12/21 [00:10<00:08,  1.10it/s] 62%|██████▏   | 13/21 [00:11<00:07,  1.12it/s] 67%|██████▋   | 14/21 [00:12<00:06,  1.11it/s] 71%|███████▏  | 15/21 [00:16<00:10,  1.68s/it] 76%|███████▌  | 16/21 [00:16<00:07,  1.46s/it] 81%|████████  | 17/21 [00:17<00:05,  1.31s/it] 86%|████████▌ | 18/21 [00:18<00:03,  1.20s/it] 90%|█████████ | 19/21 [00:19<00:02,  1.15s/it] 95%|█████████▌| 20/21 [00:20<00:01,  1.11s/it]100%|██████████| 21/21 [00:21<00:00,  1.09s/it]100%|██████████| 21/21 [00:21<00:00,  1.05s/it]
+  0%|          | 0/21 [00:00<?, ?it/s]  5%|▍         | 1/21 [00:00<00:13,  1.47it/s] 10%|▉         | 2/21 [00:01<00:13,  1.37it/s] 14%|█▍        | 3/21 [00:02<00:14,  1.27it/s] 19%|█▉        | 4/21 [00:03<00:14,  1.20it/s] 24%|██▍       | 5/21 [00:04<00:13,  1.18it/s] 29%|██▊       | 6/21 [00:04<00:12,  1.17it/s] 33%|███▎      | 7/21 [00:05<00:12,  1.16it/s] 38%|███▊      | 8/21 [00:06<00:11,  1.16it/s] 43%|████▎     | 9/21 [00:07<00:10,  1.15it/s] 48%|████▊     | 10/21 [00:08<00:09,  1.16it/s] 52%|█████▏    | 11/21 [00:09<00:08,  1.17it/s] 57%|█████▋    | 12/21 [00:10<00:07,  1.18it/s] 62%|██████▏   | 13/21 [00:10<00:06,  1.19it/s] 67%|██████▋   | 14/21 [00:11<00:05,  1.20it/s] 71%|███████▏  | 15/21 [00:12<00:05,  1.18it/s] 76%|███████▌  | 16/21 [00:13<00:04,  1.16it/s] 81%|████████  | 17/21 [00:14<00:03,  1.16it/s] 86%|████████▌ | 18/21 [00:15<00:02,  1.15it/s] 90%|█████████ | 19/21 [00:16<00:01,  1.14it/s] 95%|█████████▌| 20/21 [00:17<00:00,  1.13it/s]100%|██████████| 21/21 [00:18<00:00,  1.10it/s]100%|██████████| 21/21 [00:18<00:00,  1.17it/s]
+  0%|          | 0/21 [00:00<?, ?it/s]  5%|▍         | 1/21 [00:00<00:13,  1.50it/s] 10%|▉         | 2/21 [00:01<00:14,  1.31it/s] 14%|█▍        | 3/21 [00:02<00:15,  1.19it/s] 19%|█▉        | 4/21 [00:03<00:15,  1.13it/s] 24%|██▍       | 5/21 [00:04<00:14,  1.10it/s] 29%|██▊       | 6/21 [00:05<00:13,  1.09it/s] 33%|███▎      | 7/21 [00:06<00:12,  1.08it/s] 38%|███▊      | 8/21 [00:09<00:22,  1.74s/it] 43%|████▎     | 9/21 [00:10<00:17,  1.50s/it] 48%|████▊     | 10/21 [00:11<00:14,  1.33s/it] 52%|█████▏    | 11/21 [00:12<00:12,  1.22s/it] 57%|█████▋    | 12/21 [00:13<00:10,  1.14s/it] 62%|██████▏   | 13/21 [00:14<00:08,  1.08s/it] 67%|██████▋   | 14/21 [00:15<00:07,  1.05s/it] 71%|███████▏  | 15/21 [00:16<00:06,  1.03s/it] 76%|███████▌  | 16/21 [00:17<00:05,  1.02s/it] 81%|████████  | 17/21 [00:18<00:04,  1.01s/it] 86%|████████▌ | 18/21 [00:19<00:02,  1.01it/s] 90%|█████████ | 19/21 [00:20<00:02,  1.00s/it] 95%|█████████▌| 20/21 [00:21<00:01,  1.01s/it]100%|██████████| 21/21 [00:22<00:00,  1.04s/it]100%|██████████| 21/21 [00:22<00:00,  1.07s/it]
+  0%|          | 0/21 [00:00<?, ?it/s]  5%|▍         | 1/21 [00:00<00:13,  1.48it/s] 10%|▉         | 2/21 [00:01<00:14,  1.29it/s] 14%|█▍        | 3/21 [00:02<00:15,  1.19it/s] 19%|█▉        | 4/21 [00:03<00:15,  1.12it/s] 24%|██▍       | 5/21 [00:04<00:14,  1.08it/s] 29%|██▊       | 6/21 [00:05<00:14,  1.07it/s] 33%|███▎      | 7/21 [00:06<00:13,  1.07it/s] 38%|███▊      | 8/21 [00:07<00:12,  1.07it/s] 43%|████▎     | 9/21 [00:08<00:11,  1.06it/s] 48%|████▊     | 10/21 [00:09<00:10,  1.03it/s] 52%|█████▏    | 11/21 [00:10<00:09,  1.01it/s] 57%|█████▋    | 12/21 [00:11<00:08,  1.01it/s] 62%|██████▏   | 13/21 [00:12<00:07,  1.02it/s] 67%|██████▋   | 14/21 [00:13<00:06,  1.02it/s] 71%|███████▏  | 15/21 [00:14<00:05,  1.02it/s] 76%|███████▌  | 16/21 [00:15<00:04,  1.04it/s] 81%|████████  | 17/21 [00:16<00:03,  1.05it/s] 86%|████████▌ | 18/21 [00:16<00:02,  1.05it/s] 90%|█████████ | 19/21 [00:17<00:01,  1.04it/s] 95%|█████████▌| 20/21 [00:18<00:00,  1.03it/s]100%|██████████| 21/21 [00:21<00:00,  1.60s/it]100%|██████████| 21/21 [00:21<00:00,  1.05s/it]
+  0%|          | 0/21 [00:00<?, ?it/s]  5%|▍         | 1/21 [00:00<00:13,  1.50it/s] 10%|▉         | 2/21 [00:01<00:14,  1.30it/s] 14%|█▍        | 3/21 [00:02<00:15,  1.18it/s] 19%|█▉        | 4/21 [00:03<00:15,  1.09it/s] 24%|██▍       | 5/21 [00:04<00:15,  1.05it/s] 29%|██▊       | 6/21 [00:05<00:14,  1.02it/s] 33%|███▎      | 7/21 [00:06<00:13,  1.01it/s] 38%|███▊      | 8/21 [00:07<00:12,  1.01it/s] 43%|████▎     | 9/21 [00:08<00:11,  1.02it/s] 48%|████▊     | 10/21 [00:09<00:10,  1.03it/s] 52%|█████▏    | 11/21 [00:10<00:09,  1.04it/s] 57%|█████▋    | 12/21 [00:11<00:08,  1.04it/s] 62%|██████▏   | 13/21 [00:12<00:07,  1.06it/s] 67%|██████▋   | 14/21 [00:13<00:06,  1.06it/s] 71%|███████▏  | 15/21 [00:14<00:05,  1.06it/s] 76%|███████▌  | 16/21 [00:15<00:04,  1.07it/s] 81%|████████  | 17/21 [00:16<00:03,  1.06it/s] 86%|████████▌ | 18/21 [00:16<00:02,  1.05it/s] 90%|█████████ | 19/21 [00:17<00:01,  1.04it/s] 95%|█████████▌| 20/21 [00:18<00:00,  1.04it/s]100%|██████████| 21/21 [00:19<00:00,  1.02it/s]100%|██████████| 21/21 [00:19<00:00,  1.05it/s]
+  0%|          | 0/21 [00:00<?, ?it/s]  5%|▍         | 1/21 [00:00<00:12,  1.58it/s] 10%|▉         | 2/21 [00:01<00:14,  1.34it/s] 14%|█▍        | 3/21 [00:02<00:15,  1.20it/s] 19%|█▉        | 4/21 [00:03<00:15,  1.11it/s] 24%|██▍       | 5/21 [00:04<00:14,  1.07it/s] 29%|██▊       | 6/21 [00:05<00:14,  1.06it/s] 33%|███▎      | 7/21 [00:06<00:13,  1.02it/s] 38%|███▊      | 8/21 [00:07<00:12,  1.01it/s] 43%|████▎     | 9/21 [00:08<00:11,  1.01it/s] 48%|████▊     | 10/21 [00:09<00:10,  1.01it/s] 52%|█████▏    | 11/21 [00:10<00:09,  1.01it/s] 57%|█████▋    | 12/21 [00:13<00:16,  1.78s/it] 62%|██████▏   | 13/21 [00:14<00:12,  1.55s/it] 67%|██████▋   | 14/21 [00:16<00:09,  1.39s/it] 71%|███████▏  | 15/21 [00:17<00:07,  1.27s/it] 76%|███████▌  | 16/21 [00:17<00:05,  1.18s/it] 81%|████████  | 17/21 [00:18<00:04,  1.13s/it] 86%|████████▌ | 18/21 [00:20<00:03,  1.11s/it] 90%|█████████ | 19/21 [00:21<00:02,  1.08s/it] 95%|█████████▌| 20/21 [00:22<00:01,  1.06s/it]100%|██████████| 21/21 [00:23<00:00,  1.05s/it]100%|██████████| 21/21 [00:23<00:00,  1.10s/it]
+  0%|          | 0/21 [00:00<?, ?it/s]  5%|▍         | 1/21 [00:00<00:13,  1.52it/s] 10%|▉         | 2/21 [00:01<00:14,  1.29it/s] 14%|█▍        | 3/21 [00:02<00:15,  1.17it/s] 19%|█▉        | 4/21 [00:03<00:15,  1.11it/s] 24%|██▍       | 5/21 [00:04<00:14,  1.07it/s] 29%|██▊       | 6/21 [00:05<00:14,  1.05it/s] 33%|███▎      | 7/21 [00:06<00:13,  1.04it/s] 38%|███▊      | 8/21 [00:07<00:12,  1.05it/s] 43%|████▎     | 9/21 [00:08<00:11,  1.06it/s] 48%|████▊     | 10/21 [00:09<00:10,  1.06it/s] 52%|█████▏    | 11/21 [00:10<00:09,  1.08it/s] 57%|█████▋    | 12/21 [00:10<00:08,  1.09it/s] 62%|██████▏   | 13/21 [00:11<00:07,  1.10it/s] 67%|██████▋   | 14/21 [00:12<00:06,  1.10it/s] 71%|███████▏  | 15/21 [00:13<00:05,  1.10it/s] 76%|███████▌  | 16/21 [00:14<00:04,  1.08it/s] 81%|████████  | 17/21 [00:15<00:03,  1.05it/s] 86%|████████▌ | 18/21 [00:16<00:02,  1.05it/s] 90%|█████████ | 19/21 [00:17<00:01,  1.04it/s] 95%|█████████▌| 20/21 [00:18<00:00,  1.02it/s]100%|██████████| 21/21 [00:19<00:00,  1.01it/s]100%|██████████| 21/21 [00:19<00:00,  1.07it/s]
+  0%|          | 0/21 [00:00<?, ?it/s]  5%|▍         | 1/21 [00:00<00:12,  1.59it/s] 10%|▉         | 2/21 [00:01<00:14,  1.32it/s] 14%|█▍        | 3/21 [00:02<00:15,  1.18it/s] 19%|█▉        | 4/21 [00:05<00:29,  1.76s/it] 24%|██▍       | 5/21 [00:06<00:23,  1.49s/it] 29%|██▊       | 6/21 [00:07<00:19,  1.32s/it] 33%|███▎      | 7/21 [00:08<00:16,  1.20s/it] 38%|███▊      | 8/21 [00:09<00:14,  1.13s/it] 43%|████▎     | 9/21 [00:10<00:13,  1.08s/it] 48%|████▊     | 10/21 [00:11<00:11,  1.04s/it] 52%|█████▏    | 11/21 [00:12<00:10,  1.01s/it] 57%|█████▋    | 12/21 [00:13<00:08,  1.02it/s] 62%|██████▏   | 13/21 [00:14<00:07,  1.04it/s] 67%|██████▋   | 14/21 [00:15<00:06,  1.05it/s] 71%|███████▏  | 15/21 [00:16<00:05,  1.06it/s] 76%|███████▌  | 16/21 [00:17<00:04,  1.06it/s] 81%|████████  | 17/21 [00:17<00:03,  1.05it/s] 86%|████████▌ | 18/21 [00:18<00:02,  1.05it/s] 90%|█████████ | 19/21 [00:19<00:01,  1.03it/s] 95%|█████████▌| 20/21 [00:20<00:00,  1.01it/s]100%|██████████| 21/21 [00:22<00:00,  1.01s/it]100%|██████████| 21/21 [00:22<00:00,  1.05s/it]
+  0%|          | 0/21 [00:00<?, ?it/s]  5%|▍         | 1/21 [00:00<00:14,  1.38it/s] 10%|▉         | 2/21 [00:01<00:15,  1.21it/s] 14%|█▍        | 3/21 [00:02<00:16,  1.10it/s] 19%|█▉        | 4/21 [00:03<00:16,  1.05it/s] 24%|██▍       | 5/21 [00:04<00:15,  1.02it/s] 29%|██▊       | 6/21 [00:05<00:14,  1.01it/s] 33%|███▎      | 7/21 [00:06<00:14,  1.00s/it] 38%|███▊      | 8/21 [00:07<00:13,  1.01s/it] 43%|████▎     | 9/21 [00:08<00:12,  1.01s/it] 48%|████▊     | 10/21 [00:09<00:11,  1.00s/it] 52%|█████▏    | 11/21 [00:10<00:09,  1.00it/s] 57%|█████▋    | 12/21 [00:11<00:09,  1.00s/it] 62%|██████▏   | 13/21 [00:12<00:08,  1.00s/it] 67%|██████▋   | 14/21 [00:13<00:07,  1.02s/it] 71%|███████▏  | 15/21 [00:14<00:06,  1.04s/it] 76%|███████▌  | 16/21 [00:18<00:09,  1.83s/it] 81%|████████  | 17/21 [00:19<00:06,  1.59s/it] 86%|████████▌ | 18/21 [00:20<00:04,  1.45s/it] 90%|█████████ | 19/21 [00:21<00:02,  1.34s/it] 95%|█████████▌| 20/21 [00:22<00:01,  1.29s/it]100%|██████████| 21/21 [00:24<00:00,  1.27s/it]100%|██████████| 21/21 [00:24<00:00,  1.15s/it]
+
+=== H/G/pi Report ===
+[H/G/pi Summary] H(min=0.048191 mean=439.062859 max=7197.368793) | G(min=5.284473e-12 mean=5.996566e-08 max=6.422586e-07) | pi(min=90.401456 mean=8562.703900 max=10000.000000)
+[H/G/pi Robust] Hs(min=0.001975 mean=67.050998 max=434.186685) | Gs(min=4.468951e-12 mean=2.254708e-08 max=2.417470e-07) | log_pi(min=4.504260 mean=8.850428 max=9.210340)
+[H/G/pi Per Module]
+  base_model.model.lm_head.lora_A.default: H=7197.368793 G=1.203971e-08 pi=10000.000000 H_bal=0.719737 G_bal=1.203971e-04 Hs=130.013801 Gs=6.911848e-09 log_pi=9.210340
+  base_model.model.model.layers.0.self_attn.q_proj.lora_A.default: H=0.048481 G=6.422586e-07 pi=90.401456 H_bal=0.000536 G_bal=5.806111e-05 Hs=0.001976 Gs=2.417470e-07 log_pi=4.504260
+  base_model.model.model.layers.0.self_attn.v_proj.lora_A.default: H=0.048191 G=2.523953e-08 pi=421.000396 H_bal=0.000114 G_bal=1.062585e-05 Hs=0.001975 Gs=1.114322e-08 log_pi=6.042634
+  base_model.model.model.layers.1.self_attn.q_proj.lora_A.default: H=0.128734 G=4.006968e-07 pi=313.069802 H_bal=0.000411 G_bal=1.254461e-04 Hs=0.014724 Gs=1.502301e-07 log_pi=5.746426
+  base_model.model.model.layers.1.self_attn.v_proj.lora_A.default: H=0.128459 G=2.155032e-09 pi=4523.972482 H_bal=0.000028 G_bal=9.749306e-06 Hs=0.014717 Gs=7.190995e-10 log_pi=8.417146
+  base_model.model.model.layers.10.self_attn.q_proj.lora_A.default: H=18.854327 G=3.016339e-08 pi=10000.000000 H_bal=0.001885 G_bal=3.016339e-04 Hs=4.066794 Gs=1.491037e-08 log_pi=9.210340
+  base_model.model.model.layers.10.self_attn.v_proj.lora_A.default: H=18.896666 G=1.397328e-09 pi=10000.000000 H_bal=0.001890 G_bal=1.397328e-05 Hs=4.068712 Gs=6.444655e-10 log_pi=9.210340
+  base_model.model.model.layers.11.self_attn.q_proj.lora_A.default: H=8.220338 G=1.220769e-07 pi=6786.713961 H_bal=0.001211 G_bal=8.285007e-04 Hs=1.734520 Gs=3.765825e-08 log_pi=8.822722
+  base_model.model.model.layers.11.self_attn.v_proj.lora_A.default: H=8.242815 G=1.897349e-09 pi=10000.000000 H_bal=0.000824 G_bal=1.897349e-05 Hs=1.734444 Gs=7.205549e-10 log_pi=9.210340
+  base_model.model.model.layers.12.self_attn.q_proj.lora_A.default: H=10.976897 G=4.042383e-08 pi=10000.000000 H_bal=0.001098 G_bal=4.042383e-04 Hs=2.069601 Gs=1.986852e-08 log_pi=9.210340
+  base_model.model.model.layers.12.self_attn.v_proj.lora_A.default: H=10.956748 G=7.866129e-09 pi=10000.000000 H_bal=0.001096 G_bal=7.866129e-05 Hs=2.070598 Gs=5.099009e-09 log_pi=9.210340
+  base_model.model.model.layers.13.self_attn.q_proj.lora_A.default: H=9.783929 G=1.400202e-07 pi=4967.188773 H_bal=0.001970 G_bal=6.955066e-04 Hs=1.620289 Gs=6.567063e-08 log_pi=8.510609
+  base_model.model.model.layers.13.self_attn.v_proj.lora_A.default: H=9.750595 G=3.032032e-09 pi=10000.000000 H_bal=0.000975 G_bal=3.032032e-05 Hs=1.619537 Gs=1.105676e-09 log_pi=9.210340
+  base_model.model.model.layers.14.self_attn.q_proj.lora_A.default: H=19.079904 G=1.361315e-07 pi=7172.691992 H_bal=0.002660 G_bal=9.764295e-04 Hs=3.104575 Gs=6.034451e-08 log_pi=8.878036
+  base_model.model.model.layers.14.self_attn.v_proj.lora_A.default: H=19.141964 G=1.102624e-08 pi=10000.000000 H_bal=0.001914 G_bal=1.102624e-04 Hs=3.105412 Gs=4.560309e-09 log_pi=9.210340
+  base_model.model.model.layers.15.self_attn.q_proj.lora_A.default: H=21.598942 G=2.585175e-07 pi=4715.020820 H_bal=0.004581 G_bal=1.218915e-03 Hs=2.741699 Gs=1.233254e-07 log_pi=8.458509
+  base_model.model.model.layers.15.self_attn.v_proj.lora_A.default: H=21.617413 G=1.965859e-08 pi=10000.000000 H_bal=0.002162 G_bal=1.965859e-04 Hs=2.742538 Gs=8.316935e-09 log_pi=9.210340
+  base_model.model.model.layers.16.self_attn.q_proj.lora_A.default: H=36.276907 G=9.570001e-08 pi=10000.000000 H_bal=0.003628 G_bal=9.570001e-04 Hs=5.688962 Gs=3.403748e-08 log_pi=9.210340
+  base_model.model.model.layers.16.self_attn.v_proj.lora_A.default: H=36.300804 G=1.324107e-08 pi=10000.000000 H_bal=0.003630 G_bal=1.324107e-04 Hs=5.689649 Gs=5.912855e-09 log_pi=9.210340
+  base_model.model.model.layers.17.self_attn.q_proj.lora_A.default: H=32.240303 G=2.021556e-07 pi=9250.617031 H_bal=0.003485 G_bal=1.870064e-03 Hs=5.946872 Gs=6.949398e-08 log_pi=9.132446
+  base_model.model.model.layers.17.self_attn.v_proj.lora_A.default: H=32.205906 G=1.860329e-09 pi=10000.000000 H_bal=0.003221 G_bal=1.860329e-05 Hs=5.946584 Gs=8.897682e-10 log_pi=9.210340
+  base_model.model.model.layers.18.self_attn.q_proj.lora_A.default: H=38.087518 G=1.277160e-07 pi=10000.000000 H_bal=0.003809 G_bal=1.277160e-03 Hs=6.251529 Gs=4.833633e-08 log_pi=9.210340
+  base_model.model.model.layers.18.self_attn.v_proj.lora_A.default: H=38.148970 G=4.169497e-09 pi=10000.000000 H_bal=0.003815 G_bal=4.169497e-05 Hs=6.258010 Gs=1.977382e-09 log_pi=9.210340
+  base_model.model.model.layers.19.self_attn.q_proj.lora_A.default: H=61.265149 G=1.771893e-07 pi=10000.000000 H_bal=0.006127 G_bal=1.771893e-03 Hs=13.234354 Gs=5.379315e-08 log_pi=9.210340
+  base_model.model.model.layers.19.self_attn.v_proj.lora_A.default: H=61.335040 G=6.297626e-10 pi=10000.000000 H_bal=0.006134 G_bal=6.297626e-06 Hs=13.237026 Gs=2.805976e-10 log_pi=9.210340
+  base_model.model.model.layers.2.self_attn.q_proj.lora_A.default: H=0.191585 G=3.952713e-07 pi=563.184946 H_bal=0.000340 G_bal=2.226109e-04 Hs=0.045246 Gs=1.426516e-07 log_pi=6.333608
+  base_model.model.model.layers.2.self_attn.v_proj.lora_A.default: H=0.191744 G=2.396180e-09 pi=7162.422571 H_bal=0.000027 G_bal=1.716246e-05 Hs=0.045232 Gs=8.817180e-10 log_pi=8.876604
+  base_model.model.model.layers.20.self_attn.q_proj.lora_A.default: H=58.700362 G=1.185385e-07 pi=10000.000000 H_bal=0.005870 G_bal=1.185385e-03 Hs=13.361901 Gs=3.851383e-08 log_pi=9.210340
+  base_model.model.model.layers.20.self_attn.v_proj.lora_A.default: H=58.871860 G=6.128825e-09 pi=10000.000000 H_bal=0.005887 G_bal=6.128825e-05 Hs=13.377050 Gs=1.462678e-09 log_pi=9.210340
+  base_model.model.model.layers.21.self_attn.q_proj.lora_A.default: H=82.675513 G=1.358791e-07 pi=10000.000000 H_bal=0.008268 G_bal=1.358791e-03 Hs=19.220828 Gs=5.958262e-08 log_pi=9.210340
+  base_model.model.model.layers.21.self_attn.v_proj.lora_A.default: H=82.726188 G=7.702667e-10 pi=10000.000000 H_bal=0.008273 G_bal=7.702667e-06 Hs=19.212718 Gs=3.561116e-10 log_pi=9.210340
+  base_model.model.model.layers.22.self_attn.q_proj.lora_A.default: H=152.032209 G=2.933757e-08 pi=10000.000000 H_bal=0.015203 G_bal=2.933757e-04 Hs=40.419418 Gs=1.329015e-08 log_pi=9.210340
+  base_model.model.model.layers.22.self_attn.v_proj.lora_A.default: H=152.283861 G=9.979260e-10 pi=10000.000000 H_bal=0.015228 G_bal=9.979260e-06 Hs=40.407731 Gs=3.901354e-10 log_pi=9.210340
+  base_model.model.model.layers.23.self_attn.q_proj.lora_A.default: H=139.212315 G=7.077788e-08 pi=10000.000000 H_bal=0.013921 G_bal=7.077788e-04 Hs=38.274752 Gs=2.892307e-08 log_pi=9.210340
+  base_model.model.model.layers.23.self_attn.v_proj.lora_A.default: H=139.153572 G=1.014660e-09 pi=10000.000000 H_bal=0.013915 G_bal=1.014660e-05 Hs=38.241675 Gs=4.562475e-10 log_pi=9.210340
+  base_model.model.model.layers.24.self_attn.q_proj.lora_A.default: H=233.982471 G=1.397151e-08 pi=10000.000000 H_bal=0.023398 G_bal=1.397151e-04 Hs=59.896585 Gs=8.262816e-09 log_pi=9.210340
+  base_model.model.model.layers.24.self_attn.v_proj.lora_A.default: H=233.849936 G=2.523448e-10 pi=10000.000000 H_bal=0.023385 G_bal=2.523448e-06 Hs=59.897379 Gs=1.269210e-10 log_pi=9.210340
+  base_model.model.model.layers.25.self_attn.q_proj.lora_A.default: H=193.154345 G=4.355365e-09 pi=10000.000000 H_bal=0.019315 G_bal=4.355365e-05 Hs=58.180552 Gs=1.299588e-09 log_pi=9.210340
+  base_model.model.model.layers.25.self_attn.v_proj.lora_A.default: H=193.483584 G=2.318004e-10 pi=10000.000000 H_bal=0.019348 G_bal=2.318004e-06 Hs=58.203971 Gs=1.439359e-10 log_pi=9.210340
+  base_model.model.model.layers.26.self_attn.q_proj.lora_A.default: H=278.844594 G=1.372885e-09 pi=10000.000000 H_bal=0.027884 G_bal=1.372885e-05 Hs=86.500424 Gs=6.381955e-10 log_pi=9.210340
+  base_model.model.model.layers.26.self_attn.v_proj.lora_A.default: H=278.658240 G=2.832312e-11 pi=10000.000000 H_bal=0.027866 G_bal=2.832312e-07 Hs=86.445366 Gs=1.724456e-11 log_pi=9.210340
+  base_model.model.model.layers.27.self_attn.q_proj.lora_A.default: H=339.839230 G=2.423543e-09 pi=10000.000000 H_bal=0.033984 G_bal=2.423543e-05 Hs=92.004868 Gs=1.117666e-09 log_pi=9.210340
+  base_model.model.model.layers.27.self_attn.v_proj.lora_A.default: H=340.117469 G=4.861764e-11 pi=10000.000000 H_bal=0.034012 G_bal=4.861764e-07 Hs=92.018841 Gs=2.845653e-11 log_pi=9.210340
+  base_model.model.model.layers.28.self_attn.q_proj.lora_A.default: H=407.638619 G=2.598608e-09 pi=10000.000000 H_bal=0.040764 G_bal=2.598608e-05 Hs=75.560299 Gs=1.904564e-09 log_pi=9.210340
+  base_model.model.model.layers.28.self_attn.v_proj.lora_A.default: H=408.561649 G=3.432974e-11 pi=10000.000000 H_bal=0.040856 G_bal=3.432974e-07 Hs=75.523551 Gs=1.806877e-11 log_pi=9.210340
+  base_model.model.model.layers.29.self_attn.q_proj.lora_A.default: H=616.900680 G=5.172581e-10 pi=10000.000000 H_bal=0.061690 G_bal=5.172581e-06 Hs=135.920655 Gs=2.034881e-10 log_pi=9.210340
+  base_model.model.model.layers.29.self_attn.v_proj.lora_A.default: H=617.114015 G=5.826539e-12 pi=10000.000000 H_bal=0.061711 G_bal=5.826539e-08 Hs=135.812977 Gs=4.757466e-12 log_pi=9.210340
+  base_model.model.model.layers.3.self_attn.q_proj.lora_A.default: H=0.322266 G=3.191753e-07 pi=793.120409 H_bal=0.000406 G_bal=2.531444e-04 Hs=0.073123 Gs=1.162456e-07 log_pi=6.675975
+  base_model.model.model.layers.3.self_attn.v_proj.lora_A.default: H=0.322715 G=1.171000e-09 pi=10000.000000 H_bal=0.000032 G_bal=1.171000e-05 Hs=0.073148 Gs=5.406514e-10 log_pi=9.210340
+  base_model.model.model.layers.30.self_attn.q_proj.lora_A.default: H=809.094860 G=1.303308e-09 pi=10000.000000 H_bal=0.080909 G_bal=1.303308e-05 Hs=191.019895 Gs=5.019452e-10 log_pi=9.210340
+  base_model.model.model.layers.30.self_attn.v_proj.lora_A.default: H=806.366857 G=3.356504e-10 pi=10000.000000 H_bal=0.080637 G_bal=3.356504e-06 Hs=190.949170 Gs=1.476154e-10 log_pi=9.210340
+  base_model.model.model.layers.31.self_attn.q_proj.lora_A.default: H=1068.667651 G=2.649401e-10 pi=10000.000000 H_bal=0.106867 G_bal=2.649401e-06 Hs=199.223542 Gs=1.708811e-10 log_pi=9.210340
+  base_model.model.model.layers.31.self_attn.v_proj.lora_A.default: H=1069.447539 G=8.461362e-12 pi=10000.000000 H_bal=0.106945 G_bal=8.461362e-08 Hs=199.380263 Gs=5.745348e-12 log_pi=9.210340
+  base_model.model.model.layers.32.self_attn.q_proj.lora_A.default: H=1596.343609 G=3.472728e-10 pi=10000.000000 H_bal=0.159634 G_bal=3.472728e-06 Hs=269.981487 Gs=2.180820e-10 log_pi=9.210340
+  base_model.model.model.layers.32.self_attn.v_proj.lora_A.default: H=1586.650166 G=5.284473e-12 pi=10000.000000 H_bal=0.158665 G_bal=5.284473e-08 Hs=269.749600 Gs=4.468951e-12 log_pi=9.210340
+  base_model.model.model.layers.33.self_attn.q_proj.lora_A.default: H=2441.978894 G=9.981402e-11 pi=10000.000000 H_bal=0.244198 G_bal=9.981402e-07 Hs=330.411568 Gs=4.572432e-11 log_pi=9.210340
+  base_model.model.model.layers.33.self_attn.v_proj.lora_A.default: H=2442.666094 G=5.975498e-12 pi=10000.000000 H_bal=0.244267 G_bal=5.975498e-08 Hs=330.448946 Gs=4.918014e-12 log_pi=9.210340
+  base_model.model.model.layers.34.self_attn.q_proj.lora_A.default: H=2593.431226 G=2.173997e-09 pi=10000.000000 H_bal=0.259343 G_bal=2.173997e-05 Hs=434.186685 Gs=6.966098e-10 log_pi=9.210340
+  base_model.model.model.layers.34.self_attn.v_proj.lora_A.default: H=2592.625782 G=1.200505e-11 pi=10000.000000 H_bal=0.259263 G_bal=1.200505e-07 Hs=433.798195 Gs=6.663125e-12 log_pi=9.210340
+  base_model.model.model.layers.35.self_attn.q_proj.lora_A.default: H=1137.279851 G=1.496065e-09 pi=10000.000000 H_bal=0.113728 G_bal=1.496065e-05 Hs=287.010732 Gs=6.270264e-10 log_pi=9.210340
+  base_model.model.model.layers.35.self_attn.v_proj.lora_A.default: H=1138.514669 G=1.187956e-10 pi=10000.000000 H_bal=0.113851 G_bal=1.187956e-06 Hs=287.105997 Gs=5.866754e-11 log_pi=9.210340
+  base_model.model.model.layers.4.self_attn.q_proj.lora_A.default: H=0.544970 G=4.129646e-07 pi=1296.172420 H_bal=0.000420 G_bal=5.352733e-04 Hs=0.162409 Gs=9.666838e-08 log_pi=7.167171
+  base_model.model.model.layers.4.self_attn.v_proj.lora_A.default: H=0.545217 G=7.385808e-10 pi=10000.000000 H_bal=0.000055 G_bal=7.385808e-06 Hs=0.162467 Gs=3.177842e-10 log_pi=9.210340
+  base_model.model.model.layers.5.self_attn.q_proj.lora_A.default: H=0.681070 G=9.058290e-08 pi=1852.405976 H_bal=0.000368 G_bal=1.677963e-04 Hs=0.123444 Gs=3.597480e-08 log_pi=7.524241
+  base_model.model.model.layers.5.self_attn.v_proj.lora_A.default: H=0.680823 G=3.523570e-09 pi=10000.000000 H_bal=0.000068 G_bal=3.523570e-05 Hs=0.123327 Gs=1.117245e-09 log_pi=9.210340
+  base_model.model.model.layers.6.self_attn.q_proj.lora_A.default: H=1.121249 G=1.204078e-07 pi=2044.963091 H_bal=0.000548 G_bal=2.462295e-04 Hs=0.200872 Gs=4.803407e-08 log_pi=7.623135
+  base_model.model.model.layers.6.self_attn.v_proj.lora_A.default: H=1.122448 G=5.155533e-09 pi=9218.968206 H_bal=0.000122 G_bal=4.752870e-05 Hs=0.200829 Gs=2.362989e-09 log_pi=9.129018
+  base_model.model.model.layers.7.self_attn.q_proj.lora_A.default: H=5.393122 G=4.109015e-08 pi=5753.775092 H_bal=0.000937 G_bal=2.364235e-04 Hs=0.825172 Gs=2.492521e-08 log_pi=8.657611
+  base_model.model.model.layers.7.self_attn.v_proj.lora_A.default: H=5.385611 G=5.157381e-09 pi=10000.000000 H_bal=0.000539 G_bal=5.157381e-05 Hs=0.825636 Gs=2.369923e-09 log_pi=9.210340
+  base_model.model.model.layers.8.self_attn.q_proj.lora_A.default: H=8.028046 G=4.890934e-08 pi=9651.722493 H_bal=0.000832 G_bal=4.720594e-04 Hs=1.720302 Gs=1.846694e-08 log_pi=9.174892
+  base_model.model.model.layers.8.self_attn.v_proj.lora_A.default: H=8.003890 G=2.834994e-09 pi=10000.000000 H_bal=0.000800 G_bal=2.834994e-05 Hs=1.720149 Gs=9.601607e-10 log_pi=9.210340
+  base_model.model.model.layers.9.self_attn.q_proj.lora_A.default: H=8.745994 G=4.930116e-08 pi=8499.972780 H_bal=0.001029 G_bal=4.190585e-04 Hs=1.846977 Gs=2.556386e-08 log_pi=9.047818
+  base_model.model.model.layers.9.self_attn.v_proj.lora_A.default: H=8.736274 G=6.094794e-09 pi=10000.000000 H_bal=0.000874 G_bal=6.094794e-05 Hs=1.848025 Gs=1.929841e-09 log_pi=9.210340
+
+=== Kalman Filter Only (module-wise) ===
+[Kalman] modules=73 L_total=2336
+
+Directly sampling final posterior (t=T): S=32
+[TIME] TRAIN-STAGE Seq-LoRA posterior build on scienceqa_closedchoice_grade2_11: 336.03 sec (5.60 min)
+[PEAK] TRAIN-STAGE Seq-LoRA posterior build on scienceqa_closedchoice_grade2_11: alloc=28.12 GB  reserved=38.87 GB
+
+=== Evaluation: source=scienceqa_closedchoice_grade2_11 | targets=['scienceqa_closedchoice_grade2_11', 'scienceqa_closedchoice_grade12', 'obqa', 'arc-c', 'mmlu_science_high', 'mmlu_science_college', 'gpqa_main'] ===
+[TIME] INFER Seq-LoRA on scienceqa_closedchoice_grade2_11_iid: 319.51 sec (5.33 min)
+[PEAK] INFER Seq-LoRA on scienceqa_closedchoice_grade2_11_iid: alloc=14.84 GB  reserved=18.57 GB
+
+[scienceqa_closedchoice_grade2_11_iid]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.1583
+  brier_bayes: 0.0885
+  ece_bayes: 3.58%
+  acc_bayes: 93.65%
+  [Timing] Bayes sampling: 319.380s
+[TIME] INFER Seq-LoRA on scienceqa_closedchoice_grade12_ood: 65.09 sec (1.08 min)
+[PEAK] INFER Seq-LoRA on scienceqa_closedchoice_grade12_ood: alloc=14.84 GB  reserved=18.57 GB
+
+[scienceqa_closedchoice_grade12_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.2522
+  brier_bayes: 0.1461
+  ece_bayes: 4.02%
+  acc_bayes: 90.32%
+  [Timing] Bayes sampling: 65.066s
+[TIME] INFER Seq-LoRA on obqa_ood: 70.63 sec (1.18 min)
+[PEAK] INFER Seq-LoRA on obqa_ood: alloc=14.65 GB  reserved=16.16 GB
+
+[obqa_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.3829
+  brier_bayes: 0.1953
+  ece_bayes: 4.33%
+  acc_bayes: 86.40%
+  [Timing] Bayes sampling: 70.546s
+[TIME] INFER Seq-LoRA on arc-c_ood: 232.41 sec (3.87 min)
+[PEAK] INFER Seq-LoRA on arc-c_ood: alloc=14.86 GB  reserved=19.09 GB
+
+[arc-c_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.2465
+  brier_bayes: 0.1255
+  ece_bayes: 2.75%
+  acc_bayes: 91.38%
+  [Timing] Bayes sampling: 232.226s
+[TIME] INFER Seq-LoRA on mmlu_science_high_ood: 170.92 sec (2.85 min)
+[PEAK] INFER Seq-LoRA on mmlu_science_high_ood: alloc=15.07 GB  reserved=19.16 GB
+
+[mmlu_science_high_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.5193
+  brier_bayes: 0.2607
+  ece_bayes: 4.51%
+  acc_bayes: 83.13%
+  [Timing] Bayes sampling: 170.690s
+[TIME] INFER Seq-LoRA on mmlu_science_college_ood: 86.66 sec (1.44 min)
+[PEAK] INFER Seq-LoRA on mmlu_science_college_ood: alloc=15.02 GB  reserved=19.16 GB
+
+[mmlu_science_college_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 0.7031
+  brier_bayes: 0.3646
+  ece_bayes: 4.60%
+  acc_bayes: 70.81%
+  [Timing] Bayes sampling: 86.452s
+[TIME] INFER Seq-LoRA on gpqa_main_ood: 230.89 sec (3.85 min)
+[PEAK] INFER Seq-LoRA on gpqa_main_ood: alloc=15.38 GB  reserved=19.56 GB
+
+[gpqa_main_ood]
+  ===== Bayesian (Seq-LoRA) Only =====
+  nll_bayes: 1.4711
+  brier_bayes: 0.7775
+  ece_bayes: 18.83%
+  acc_bayes: 31.25%
+  [Timing] Bayes sampling: 230.516s
+
+[Done] Evaluation complete for source task scienceqa_closedchoice_grade2_11.
