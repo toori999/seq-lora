@@ -5,10 +5,6 @@ adaptation of large language models. It builds a post-hoc Bayesian posterior
 over LoRA adapter coordinates, then evaluates calibrated Bayesian model
 averages for multiple-choice QA without retraining the full base model.
 
-Manuscript status:
-
-- Accepted to JSM 2026.
-- Submitted to NeurIPS 2026.
 
 ## Overview
 
