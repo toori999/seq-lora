@@ -2,7 +2,6 @@
 
 Official implementation of **Seq-LoRA** (NeurIPS 2026).
 
-**Authors:** _to be added_ · **Paper:** _link coming soon_ · [Citation](#citation)
 
 <p align="center">
   <img src="assets/seq_lora_overview.png" width="100%" alt="Seq-LoRA overview: slice-wise quadratic surrogates, shared LoRA-A subspace projection, pseudo-observations with Kalman filtering, and posterior sampling for Bayesian prediction">
