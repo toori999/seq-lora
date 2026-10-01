@@ -1,0 +1,22 @@
+modelwrapper=mle
+model=meta-llama/Llama-2-7b-hf
+
+for dataset in winogrande_s ARC-Challenge ARC-Easy winogrande_m obqa boolq; do
+    for seed in 1 2 3; do
+        name=map-$dataset-lr5e-5-bs4-drop0.1-step2000-seed$seed
+        python -m accelerate.commands.launch --num_processes=2 --gpu_ids="0,1" --main_process_port=40000 run/main.py --dataset-type mcdataset --dataset $dataset \
+            --model-type causallm --model $model --modelwrapper $modelwrapper \
+            --lr 5e-5 --batch-size 4 \
+            --opt adamw --warmup-ratio 0.06 \
+            --max-seq-len 300 \
+            --seed $seed \
+            --wandb-name $name --wandb-project "MAP-llama-all" \
+            --apply-classhead-lora --lora-r 8 --lora-alpha 16 --lora-dropout 0.1 \
+            --log-path $name \
+            --checkpoint --checkpoint-name $name \
+            --max-train-steps 2000 \
+            --eval-per-steps 6000 \
+            --opt-wd 0.00001 \
+            --nowand
+    done
+done

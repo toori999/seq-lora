@@ -1,0 +1,40 @@
+# Python / environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Editor / OS metadata
+.DS_Store
+*:Zone.Identifier
+*.swp
+
+# Logs and experiment tracking (written by scripts/ under logs/)
+*.log
+logs/
+wandb/
+
+# Hugging Face / dataset caches
+.hf_datasets/
+.hf_datasets_cache/
+ood_cache/
+
+# Generated slice datasets (python -m seq_lora.data.make_scienceqa_slices)
+slice_data/
+
+# Seq-LoRA posterior-statistics caches
+caches/
+
+# Model checkpoints and training / evaluation outputs
+checkpoints/
+last_models/
+iid_qwen35_8b_*/
+blob_qwen35_8b_*/
+blob_qwen3_8b_*/
+clora_qwen3_8b_*/
+outputs_*/
+*.safetensors
+*.pt
+*.pth
+*.bin
