@@ -345,18 +345,6 @@ own license (see the `LICENSE` file in the corresponding directory):
 We thank the authors of these projects, as well as of ASDL, Hugging Face
 Transformers, and PEFT.
 
-## Citation
-
-If you find this work useful, please cite:
-
-```bibtex
-@inproceedings{seqlora2026,
-  title     = {Seq-LoRA: Sequential Bayesian Low-Rank Adaptation for Large Language Models},
-  author    = {TODO},
-  booktitle = {Advances in Neural Information Processing Systems},
-  year      = {2026}
-}
-```
 
 ## License
 
